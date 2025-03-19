@@ -12,7 +12,7 @@ SPIClass SPI_SD; // Custom SPI instance for SD card
 #include <SD.h>
 #include <time.h>
 
-// Last Edited 3/18/2025 10:13 PM
+// Last Edited 3/19/2025 9:09 AM
 
 // Forward declarations for date and time screens
 static void createDateSelectionScreen();
@@ -1025,9 +1025,50 @@ void loop() {
                     int rssi = WiFi.RSSI();
                     int wifi_strength = map(rssi, -100, -50, 0, 100);
                     wifi_strength = constrain(wifi_strength, 0, 100);
-                    char wifi_text[5];
+                    
+                    // Update WiFi text percentage
+                    char wifi_text[16];
                     snprintf(wifi_text, sizeof(wifi_text), "%d%%", wifi_strength);
                     lv_label_set_text(wifi_label, wifi_text);
+                    
+                    // Determine color based on connection quality
+                    uint32_t wifi_color;
+                    if (WiFi.status() != WL_CONNECTED) {
+                        wifi_color = 0xFF0000; // Red for no connection
+                    } else if (wifi_strength < 30) {
+                        wifi_color = 0xFF0000; // Red for poor connection
+                    } else if (wifi_strength < 70) {
+                        wifi_color = 0xFFAA00; // Orange/yellow for moderate connection
+                    } else {
+                        wifi_color = 0x00FF00; // Green for good connection
+                    }
+                    lv_obj_set_style_text_color(wifi_label, lv_color_hex(wifi_color), 0);
+                    
+                    // Update the bars
+                    lv_obj_t* wifi_card = lv_obj_get_parent(wifi_label);
+                    lv_obj_t* wifi_container = lv_obj_get_child(wifi_card, 0);
+                    
+                    if (wifi_container && lv_obj_is_valid(wifi_container)) {
+                        const int BAR_COUNT = 4;
+                        
+                        for (int i = 0; i < BAR_COUNT; i++) {
+                            lv_obj_t* bar = lv_obj_get_child(wifi_container, i);
+                            if (bar && lv_obj_is_valid(bar)) {
+                                bool active = wifi_strength > (i + 1) * (100 / BAR_COUNT);
+                                
+                                if (WiFi.status() != WL_CONNECTED) {
+                                    // All bars empty/gray if not connected
+                                    lv_obj_set_style_bg_color(bar, lv_color_hex(0x666666), 0);
+                                } else if (active) {
+                                    // Active bars get the signal color
+                                    lv_obj_set_style_bg_color(bar, lv_color_hex(wifi_color), 0);
+                                } else {
+                                    // Inactive bars are dimmed/gray
+                                    lv_obj_set_style_bg_color(bar, lv_color_hex(0x666666), 0);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             xSemaphoreGive(xGuiSemaphore);
@@ -1297,20 +1338,70 @@ void createMainMenu() {
     lv_obj_t* wifi_card = lv_obj_create(grid);
     lv_obj_set_grid_cell(wifi_card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
     lv_obj_add_style(wifi_card, &style_card_info, 0);
-    lv_obj_t* wifi_icon = lv_label_create(wifi_card);
-    lv_label_set_text(wifi_icon, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_font(wifi_icon, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(wifi_icon, lv_color_hex(0x4A90E2), 0);
-    lv_obj_align(wifi_icon, LV_ALIGN_CENTER, -20, 0);
-    wifi_label = lv_label_create(wifi_card);
+
+    // Create container for signal bars
+    lv_obj_t* wifi_container = lv_obj_create(wifi_card);
+    lv_obj_set_size(wifi_container, 90, 40);
+    lv_obj_set_style_bg_opa(wifi_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(wifi_container, 0, 0);
+    lv_obj_set_style_pad_all(wifi_container, 0, 0);
+    lv_obj_align(wifi_container, LV_ALIGN_CENTER, -10, 0);
+
+    // Get WiFi strength and determine color
     int rssi = WiFi.RSSI();
     int wifi_strength = map(rssi, -100, -50, 0, 100);
     wifi_strength = constrain(wifi_strength, 0, 100);
-    char wifi_text[5];
+
+    // Set color based on connection quality
+    uint32_t wifi_color;
+    if (WiFi.status() != WL_CONNECTED) {
+        wifi_color = 0xFF0000; // Red for no connection
+    } else if (wifi_strength < 30) {
+        wifi_color = 0xFF0000; // Red for poor connection
+    } else if (wifi_strength < 70) {
+        wifi_color = 0xFFAA00; // Orange/yellow for moderate connection
+    } else {
+        wifi_color = 0x00FF00; // Green for good connection
+    }
+
+    // Create signal bars
+    const int BAR_WIDTH = 8;
+    const int BAR_GAP = 2;
+    const int BAR_COUNT = 4;
+    const int MAX_BAR_HEIGHT = 30;
+
+    for (int i = 0; i < BAR_COUNT; i++) {
+        int bar_height = 6 + ((i + 1) * (MAX_BAR_HEIGHT - 6) / BAR_COUNT);
+        lv_obj_t* bar = lv_obj_create(wifi_container);
+        lv_obj_set_size(bar, BAR_WIDTH, bar_height);
+        lv_obj_set_pos(bar, i * (BAR_WIDTH + BAR_GAP), MAX_BAR_HEIGHT - bar_height);
+        
+        // Calculate if this bar should be active based on signal strength
+        bool active = wifi_strength > (i + 1) * (100 / BAR_COUNT);
+        
+        if (WiFi.status() != WL_CONNECTED) {
+            // All bars empty/gray if not connected
+            lv_obj_set_style_bg_color(bar, lv_color_hex(0x666666), 0);
+        } else if (active) {
+            // Active bars get the signal color
+            lv_obj_set_style_bg_color(bar, lv_color_hex(wifi_color), 0);
+        } else {
+            // Inactive bars are dimmed/gray
+            lv_obj_set_style_bg_color(bar, lv_color_hex(0x666666), 0);
+        }
+        
+        lv_obj_set_style_border_width(bar, 0, 0);
+        lv_obj_set_style_radius(bar, 1, 0);
+    }
+
+    // Display signal strength text next to bars
+    wifi_label = lv_label_create(wifi_card);
+    char wifi_text[16];
     snprintf(wifi_text, sizeof(wifi_text), "%d%%", wifi_strength);
     lv_label_set_text(wifi_label, wifi_text);
     lv_obj_set_style_text_font(wifi_label, &lv_font_montserrat_16, 0);
-    lv_obj_align(wifi_label, LV_ALIGN_CENTER, 20, 0);
+    lv_obj_set_style_text_color(wifi_label, lv_color_hex(wifi_color), 0);
+    lv_obj_align(wifi_label, LV_ALIGN_CENTER, 40, 0);
 
     // Card 6: Power Management (Row 2, Col 1)
     lv_obj_t* power_card = lv_obj_create(grid);
@@ -2540,7 +2631,6 @@ void createNetworkDetailsScreen(const String& ssid) {
     lv_obj_align(btn_container, LV_ALIGN_TOP_MID, 0, 70);
     lv_obj_set_style_bg_opa(btn_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(btn_container, 0, 0);
-    lv_obj_set_style_pad_all(btn_container, 0, 0);
     lv_obj_set_flex_flow(btn_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(btn_container, 15, 0);  // Add spacing between buttons
@@ -2784,46 +2874,70 @@ String getFormattedEntry(const String& entry) {
 }
 
 void initStyles() {
-    // Screen style
+    // Screen style - Deep black background
     lv_style_init(&style_screen);
-    lv_style_set_bg_color(&style_screen, lv_color_hex(0x1A1A1A));
+    lv_style_set_bg_color(&style_screen, lv_color_hex(0x121212));
     lv_style_set_bg_opa(&style_screen, LV_OPA_COVER);
 
-    // Button style
+    // Button style - Vibrant red
     lv_style_init(&style_btn);
-    lv_style_set_bg_color(&style_btn, lv_color_hex(0x4A90E2));
+    lv_style_set_bg_color(&style_btn, lv_color_hex(0xE31B23));
     lv_style_set_bg_opa(&style_btn, LV_OPA_COVER);
     lv_style_set_text_color(&style_btn, lv_color_hex(0xFFFFFF));
     lv_style_set_border_width(&style_btn, 0);
+    lv_style_set_radius(&style_btn, 8);
 
-    // Button pressed style
+    // Button pressed style - Darker red
     lv_style_init(&style_btn_pressed);
-    lv_style_set_bg_color(&style_btn_pressed, lv_color_hex(0x357ABD));
+    lv_style_set_bg_color(&style_btn_pressed, lv_color_hex(0xA81419));
     lv_style_set_bg_opa(&style_btn_pressed, LV_OPA_COVER);
 
-    // Title style
+    // Title style - Bright white text
     lv_style_init(&style_title);
     lv_style_set_text_font(&style_title, &lv_font_montserrat_20);
     lv_style_set_text_color(&style_title, lv_color_hex(0xFFFFFF));
 
-    // Card action style
+    // Card action style - Dark gray with red accent
     lv_style_init(&style_card_action);
-    lv_style_set_bg_color(&style_card_action, lv_color_hex(0x2D2D2D));
+    lv_style_set_bg_color(&style_card_action, lv_color_hex(0x2A2A2A));
     lv_style_set_bg_opa(&style_card_action, LV_OPA_COVER);
-    lv_style_set_border_color(&style_card_action, lv_color_hex(0x4A90E2));
-    lv_style_set_border_width( &style_card_action, 1);
+    lv_style_set_border_color(&style_card_action, lv_color_hex(0xE31B23));
+    lv_style_set_border_width(&style_card_action, 2);
+    lv_style_set_radius(&style_card_action, 10);
+    lv_style_set_text_color(&style_card_action, lv_color_hex(0xFFFFFF)); // Ensure text is white
 
-    // Card pressed style
+    // Card pressed style - Highlighted state
     lv_style_init(&style_card_pressed);
-    lv_style_set_bg_color(&style_card_pressed, lv_color_hex(0x357ABD));
+    lv_style_set_bg_color(&style_card_pressed, lv_color_hex(0x3A3A3A));
     lv_style_set_bg_opa(&style_card_pressed, LV_OPA_COVER);
+    lv_style_set_border_width(&style_card_pressed, 3);
+    lv_style_set_text_color(&style_card_pressed, lv_color_hex(0xFFFFFF)); // Ensure text is white
 
-    // Add other styles as needed (e.g., style_text, style_card_info)
+    // Card info style (for WiFi/Battery cards) - Dark red with white text
+    lv_style_init(&style_card_info);
+    lv_style_set_bg_color(&style_card_info, lv_color_hex(0x8B0000));  // Deep red background
+    lv_style_set_bg_opa(&style_card_info, LV_OPA_COVER);
+    lv_style_set_border_color(&style_card_info, lv_color_hex(0xFFFFFF));  // White border
+    lv_style_set_border_width(&style_card_info, 1);
+    lv_style_set_radius(&style_card_info, 10);
+    lv_style_set_text_color(&style_card_info, lv_color_hex(0xFFFFFF));  // Pure white text
+    lv_style_set_shadow_color(&style_card_info, lv_color_hex(0x000000));
+    lv_style_set_shadow_width(&style_card_info, 10);
+    lv_style_set_shadow_opa(&style_card_info, LV_OPA_30);
+
+    // Text style - Clear white
     lv_style_init(&style_text);
     lv_style_set_text_color(&style_text, lv_color_hex(0xFFFFFF));
     lv_style_set_text_font(&style_text, &lv_font_montserrat_14);
 
-    DEBUG_PRINT("Styles initialized");
+    // Keyboard button style
+    lv_style_init(&style_keyboard_btn);
+    lv_style_set_bg_color(&style_keyboard_btn, lv_color_hex(0x3D3D3D));
+    lv_style_set_text_color(&style_keyboard_btn, lv_color_hex(0xFFFFFF));
+    lv_style_set_radius(&style_keyboard_btn, 8);
+    lv_style_set_border_width(&style_keyboard_btn, 0);
+
+    DEBUG_PRINT("Styles initialized with red, white & black theme");
 }
 
 void cleanupWiFiResources() {
@@ -3916,7 +4030,7 @@ static void createDateSelectionScreen() {
 
     // Header (unchanged)
     lv_obj_t* header = lv_obj_create(date_screen);
-    lv_obj_set_size(header, 320, 40);
+    lv_obj_set_size(header, SCREEN_WIDTH, 50);
     lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(header, 10, 0);
@@ -3925,15 +4039,12 @@ static void createDateSelectionScreen() {
     lv_label_set_text(title, "Set Date");
     lv_obj_add_style(title, &style_title, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_shadow_width(title, 3, 0);
-    lv_obj_set_style_shadow_color(title, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_shadow_opa(title, LV_OPA_50, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
     // Container
     lv_obj_t* container = lv_obj_create(date_screen);
-    lv_obj_set_size(container, 300, 150);
-    lv_obj_align(container, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_size(container, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 100);  // 300x140 for 320x240
+    lv_obj_align(container, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
     lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -3944,7 +4055,7 @@ static void createDateSelectionScreen() {
     selected_date.month = DateStruct.month;
     selected_date.day = DateStruct.date;
 
-    // Selected date display (unchanged)
+    // Selected date display (replacing Date and Current Time)
     g_selected_date_label = lv_label_create(container);
     lv_obj_set_style_text_font(g_selected_date_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_bg_color(g_selected_date_label, lv_color_hex(0x2D2D2D), 0);
@@ -3952,7 +4063,7 @@ static void createDateSelectionScreen() {
     lv_obj_set_style_pad_all(g_selected_date_label, 5, 0);
     lv_obj_set_style_radius(g_selected_date_label, 5, 0);
     lv_obj_set_style_text_color(g_selected_date_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(g_selected_date_label, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(g_selected_date_label, LV_ALIGN_TOP_MID, 0, 0);  // Top center like date screen
 
     // Year picker
     lv_obj_t* year_label = lv_label_create(container);
@@ -4076,6 +4187,7 @@ static void createTimeSelectionScreen() {
     lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(header, 10, 0);
+    
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, "Set Time");
     lv_obj_add_style(title, &style_title, 0);
