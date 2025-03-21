@@ -12,7 +12,7 @@ SPIClass SPI_SD; // Custom SPI instance for SD card
 #include <SD.h>
 #include <time.h>
 
-// Last Edited 3/19/2025 9:09 AM
+// Last Edited 3/20/25 Midnight
 
 // Forward declarations for date and time screens
 static void createDateSelectionScreen();
@@ -3317,11 +3317,18 @@ void createSettingsScreen() {
     lv_obj_add_style(title, &style_title, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
     
-    // Settings list
+        // Settings list
     lv_obj_t* list = lv_list_create(settingsScreen);
-    lv_obj_set_size(list, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 100);
+    lv_obj_set_size(list, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 72);
     lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_set_style_bg_color(list, lv_color_hex(0x2D2D2D), 0);
+    lv_obj_set_style_radius(list, 15, 0); // Add rounded corners with 15px radius
+    lv_obj_set_style_border_width(list, 0, 0); // Optional: remove border
+
+    lv_obj_set_style_shadow_width(list, 10, 0);
+    lv_obj_set_style_shadow_opa(list, LV_OPA_20, 0); // 20% opacity shadow
+    lv_obj_set_style_shadow_color(list, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_ofs_y(list, 5, 0); // Shadow slightly below
     
     // WiFi settings
     lv_obj_t* wifi_btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "WiFi Settings");
@@ -3353,15 +3360,18 @@ void createSettingsScreen() {
         createPowerManagementScreen();
     }, LV_EVENT_CLICKED, NULL);
     
-    // Back button
+    // Back Button (Top-Left)
     lv_obj_t* back_btn = lv_btn_create(settingsScreen);
-    lv_obj_set_size(back_btn, 100, 40);
-    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_size(back_btn, 35, 23);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0); // Darker gray button
+    lv_obj_set_style_radius(back_btn, 5, 0);
     lv_obj_add_style(back_btn, &style_btn, 0);
     lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "Back");
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT); // Left arrow icon
     lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0); // White text
     
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
         createMainMenu();
