@@ -113,6 +113,7 @@ void updateWiFiLoadingScreen(bool success, const String& message);
 void showWiFiLoadingScreen(const String& ssid);
 void addTimeDisplay(lv_obj_t *screen); // New function to add a time display
 void updateTimeDisplay(); // Function to update the time display periodically
+void createLoadingScreen();
 
 // Global variables for scrolling
 lv_obj_t *current_scroll_obj = nullptr;
@@ -258,6 +259,7 @@ lv_obj_t* settings_screen = nullptr;
 lv_obj_t* view_logs_screen = nullptr;
 lv_obj_t* settingsScreen = nullptr;
 lv_obj_t* current_screen = nullptr;
+static lv_obj_t* loading_screen = nullptr;
 
 // Add these global variables with other UI elements
 lv_obj_t* wifi_loading_screen = nullptr;
@@ -992,6 +994,31 @@ void lvgl_task(void *pvParameters) {
     }
 }
 
+void createLoadingScreen() {
+    Serial.println("Creating loading screen...");
+    loading_screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(loading_screen, lv_color_black(), 0);
+
+    lv_obj_t* label = lv_label_create(loading_screen);
+    lv_label_set_text(label, "Loading...");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 20);
+
+    // Use the LVGL 9.2 spinner API
+    lv_obj_t* spinner = lv_spinner_create(loading_screen);
+    lv_obj_set_size(spinner, 50, 50);
+    lv_spinner_set_anim_params(spinner, 1000, 60); // 1000ms rotation, 60° arc
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0x00FF00), LV_PART_INDICATOR); // Green spinner
+    lv_obj_set_style_arc_width(spinner, 5, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0x333333), LV_PART_MAIN); // Gray background
+    lv_obj_set_style_arc_width(spinner, 5, LV_PART_MAIN);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -20);
+
+    lv_scr_load(loading_screen);
+    Serial.println("Loading screen loaded.");
+}
+
 // Simplified setup function
 void setup() {
     Serial.begin(115200);
@@ -1000,6 +1027,27 @@ void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
     M5.Power.begin();
+
+    // Initialize LVGL and display driver
+    DEBUG_PRINT("Before lv_init");
+    lv_init();
+    DEBUG_PRINT("After lv_init");
+    DEBUG_PRINT("Before M5GFX");
+    m5gfx_lvgl_init();
+    DEBUG_PRINT("After M5GFX"); 
+
+    //Create Loading Screen
+    createLoadingScreen();
+    DEBUG_PRINT("Loading screen created");
+    // Ensure the loading screen is rendered
+    lv_task_handler(); // Force a render
+    
+    // Ensure spinner animates for a few seconds
+    unsigned long start = millis();
+    while (millis() - start < 3000) { // Show for 3 seconds
+        lv_task_handler(); // Update the spinner
+        delay(10);
+    }
 
     // Enable external bus power (unchanged)
     M5.Power.setExtOutput(true);
@@ -1038,12 +1086,6 @@ void setup() {
     M5.Display.setBrightness(displayBrightness);
     DEBUG_PRINTF("Loaded Brightness settings - Brightness: %d\n", displayBrightness);
     prefs.end();
-
-    // Initialize LVGL and display driver
-    DEBUG_PRINT("Before lv_init");
-    lv_init();
-    m5gfx_lvgl_init();
-    DEBUG_PRINT("After lv_init");
 
     xTaskCreatePinnedToCore(
         lvgl_task,          // Task function
@@ -1087,8 +1129,13 @@ void setup() {
     initStyles();
     createMainMenu();
     DEBUG_PRINT("Setup complete!");
-}
 
+    // Clean up loading screen after main menu is ready
+    if (loading_screen) {
+        lv_obj_del(loading_screen);
+        loading_screen = nullptr;
+    }
+}
 
 // Simplified loop function
 void loop() {
