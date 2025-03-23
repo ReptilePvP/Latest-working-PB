@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "WiFiManager.h"
 #include <HTTPClient.h>
 #include <Wire.h>
@@ -10,7 +11,6 @@ SPIClass SPI_SD; // Custom SPI instance for SD card
 #include <SD.h>
 #include <time.h>
 
-#define LV_CONF_INCLUDE_SIMPLE
 
 // Last Edited 3/22/25 9:09 AM
 
@@ -377,7 +377,6 @@ bool fileSystemInitialized = false;
 #define LVGL_TASK_PRIORITY 5
 #define LVGL_STACK_SIZE 32768
 
-SemaphoreHandle_t xGuiSemaphore; // Definition stays here
 
 // Update parseTimestamp to handle the new format
 time_t parseTimestamp(const String& entry) {
