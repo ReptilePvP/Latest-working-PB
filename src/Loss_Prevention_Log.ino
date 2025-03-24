@@ -11,9 +11,12 @@ SPIClass SPI_SD; // Custom SPI instance for SD card
 #include <SD.h>
 #include <time.h>
 
-
 // Last Edited 3/22/25 9:09 AM
 
+// Forward declarations for loading screen
+void createLoadingScreen();
+void updateLoadingProgress(lv_timer_t* timer);  // Updated parameter type
+LV_IMG_DECLARE(LossPrev2);  // Declare the image from 
 // Forward declarations for date and time screens
 static void createDateSelectionScreen();
 static void createTimeSelectionScreen();
@@ -1085,7 +1088,10 @@ void setup() {
     initFileSystem();
 
     initStyles();
-    createMainMenu();
+    
+    // Show loading screen instead of directly creating main menu
+    createLoadingScreen();
+    
     DEBUG_PRINT("Setup complete!");
 }
 
@@ -4479,4 +4485,87 @@ static void on_minute_change(lv_event_t* e) {
     snprintf(selected_time_str, sizeof(selected_time_str), "Selected: %02d:%02d %s", 
              selected_hour, selected_minute, selected_is_pm ? "PM" : "AM");
     lv_label_set_text(g_selected_time_label, selected_time_str);
+}
+
+// Implementation of the loading screen
+void createLoadingScreen() {
+    DEBUG_PRINT("Creating loading screen");
+    
+    // Create a new screen
+    lv_obj_t* loading_screen = lv_obj_create(NULL);
+    lv_obj_add_style(loading_screen, &style_screen, 0);
+    
+    // Set the background image
+    lv_obj_t* bg_img = lv_img_create(loading_screen);
+    lv_img_set_src(bg_img, &LossPrev2);
+    lv_obj_center(bg_img);
+    
+    // Create a semi-transparent overlay for better text visibility
+    lv_obj_t* overlay = lv_obj_create(loading_screen);
+    lv_obj_set_size(overlay, SCREEN_WIDTH, SCREEN_HEIGHT);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_30, 0); // 30% opacity
+    lv_obj_set_style_border_width(overlay, 0, 0);
+    lv_obj_align(overlay, LV_ALIGN_CENTER, 0, 0);
+    
+    // Add a title
+    lv_obj_t* title = lv_label_create(loading_screen);
+    lv_label_set_text(title, "Loss Prevention Log");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    
+    // Create the progress bar
+    lv_obj_t* progress_bar = lv_bar_create(loading_screen);
+    lv_obj_set_size(progress_bar, 200, 20);
+    lv_obj_align(progress_bar, LV_ALIGN_BOTTOM_MID, 0, -40);
+    lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x333333), LV_PART_MAIN); // Dark background
+    lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x4A90E2), LV_PART_INDICATOR); // Blue indicator
+    lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
+    lv_bar_set_range(progress_bar, 0, 100);
+    
+    // Add loading text
+    lv_obj_t* loading_label = lv_label_create(loading_screen);
+    lv_label_set_text(loading_label, "Loading...");
+    lv_obj_set_style_text_color(loading_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(loading_label, LV_ALIGN_BOTTOM_MID, 0, -70);
+    
+    // Add version text
+    lv_obj_t* version_label = lv_label_create(loading_screen);
+    lv_label_set_text(version_label, "v1.0.0 - 2025");
+    lv_obj_set_style_text_color(version_label, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_align(version_label, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    
+    // Load the screen
+    lv_scr_load(loading_screen);
+    
+    // Start the timer for progress updates
+    // The timer will call updateLoadingProgress every 50ms
+    // We'll pass the progress bar as user data
+    lv_timer_t* timer = lv_timer_create(updateLoadingProgress, 50, progress_bar);
+    
+    // Store the timer in the screen's user data so we can access it later
+    lv_obj_set_user_data(loading_screen, timer);
+    
+    DEBUG_PRINT("Loading screen created");
+}
+
+// Update the loading progress bar
+void updateLoadingProgress(lv_timer_t* timer) {
+    static int progress = 0;
+    lv_obj_t* progress_bar = (lv_obj_t*)lv_timer_get_user_data(timer);
+    
+    // Calculate progress: 0-100 over 5 seconds (50ms * 100 = 5000ms)
+    progress++;
+    lv_bar_set_value(progress_bar, progress, LV_ANIM_ON);
+    
+    // When the progress reaches 100, switch to the main menu
+    if (progress >= 100) {
+        // Delete the timer
+        lv_timer_del(timer);
+        
+        // Switch to main menu
+        DEBUG_PRINT("Loading complete, switching to main menu");
+        createMainMenu();
+    }
 }
