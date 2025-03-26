@@ -11,12 +11,13 @@ SPIClass SPI_SD; // Custom SPI instance for SD card
 #include <SD.h>
 #include <time.h>
 
-// Last Edited 3/22/25 9:09 AM
+// Last Edited 3/24/25 4:00 PM
 
 // Forward declarations for loading screen
 void createLoadingScreen();
 void updateLoadingProgress(lv_timer_t* timer);  // Updated parameter type
-LV_IMG_DECLARE(LossPrev2);  // Declare the image from 
+LV_IMG_DECLARE(LossPrev2);  // Declare the image from
+
 // Forward declarations for date and time screens
 static void createDateSelectionScreen();
 static void createTimeSelectionScreen();
@@ -532,7 +533,7 @@ void createViewLogsScreen() {
 
     // Get current time from RTC
     m5::rtc_date_t currentDateStruct;
-    M5.Rtc.getDate(&currentDateStruct);
+    M5.Rtc.getDate(&currentDateStruct); // Fixed typo
     
     struct tm currentTimeInfo = {0};
     currentTimeInfo.tm_year = currentDateStruct.year - 1900;
@@ -541,7 +542,7 @@ void createViewLogsScreen() {
     currentTimeInfo.tm_hour = 0;
     currentTimeInfo.tm_min = 0;
     currentTimeInfo.tm_sec = 0;
-    time_t now = mktime(&currentTimeInfo);
+    time_t now = mktime(&currentTimeInfo); // Fixed typo
     
     char current_time[25];
     strftime(current_time, sizeof(current_time), "%d-%b-%Y %H:%M:%S", localtime(&now));
@@ -688,7 +689,7 @@ void createViewLogsScreen() {
                         lv_obj_t* text = lv_label_create(msgbox);
                         lv_label_set_text(text, "Invalid entry");
                         lv_obj_align(text, LV_ALIGN_CENTER, 0, 0);
-                        lv_obj_t* close_btn = lv_button_create(msgbox);
+                        lv_obj_t* close_btn = lv_btn_create(msgbox);
                         lv_obj_set_size(close_btn, 80, 40);
                         lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
                         lv_obj_t* close_label = lv_label_create(close_btn);
@@ -718,7 +719,7 @@ void createViewLogsScreen() {
                             lv_obj_t* text = lv_label_create(msgbox);
                             lv_label_set_text(text, "Entry data is missing or corrupted");
                             lv_obj_align(text, LV_ALIGN_CENTER, 0, 0);
-                            lv_obj_t* close_btn = lv_button_create(msgbox);
+                            lv_obj_t* close_btn = lv_btn_create(msgbox);
                             lv_obj_set_size(close_btn, 80, 40);
                             lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
                             lv_obj_t* close_label = lv_label_create(close_btn);
@@ -745,7 +746,7 @@ void createViewLogsScreen() {
                         lv_obj_set_style_text_font(text, &lv_font_montserrat_14, 0);
                         lv_obj_set_style_text_line_space(text, 2, 0);
                         lv_obj_set_style_pad_all(msgbox, 10, 0);
-                        lv_obj_t* close_btn = lv_button_create(msgbox);
+                        lv_obj_t* close_btn = lv_btn_create(msgbox);
                         lv_obj_set_size(close_btn, 80, 40);
                         lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
                         lv_obj_t* close_label = lv_label_create(close_btn);
@@ -767,7 +768,7 @@ void createViewLogsScreen() {
                         lv_label_set_text(text, "Invalid log entry format\nMissing timestamp separator");
                         lv_obj_align(text, LV_ALIGN_CENTER, 0, 0);
                         lv_obj_set_style_text_color(text, lv_color_hex(0xFF0000), 0);
-                        lv_obj_t* close_btn = lv_button_create(msgbox);
+                        lv_obj_t* close_btn = lv_btn_create(msgbox);
                         lv_obj_set_size(close_btn, 80, 40);
                         lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
                         lv_obj_t* close_label = lv_label_create(close_btn);
@@ -800,7 +801,7 @@ void createViewLogsScreen() {
         createMainMenu();
     }, LV_EVENT_CLICKED, NULL);
     
-    // Reset button with updated msgbox
+    // Reset button with success dialog
     lv_obj_t* reset_btn = lv_btn_create(logs_screen);
     lv_obj_set_size(reset_btn, 80, 40);
     lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_RIGHT, -10, 0);
@@ -816,43 +817,51 @@ void createViewLogsScreen() {
         lv_obj_t* msgbox = lv_msgbox_create(NULL);
         lv_obj_set_size(msgbox, 250, 150);
         lv_obj_center(msgbox);
+        // Remove LV_OBJ_FLAG_MODAL (not available in v9.2.2)
+        lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0); // Ensure background is visible
+        lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0); // Gray tint using hex
 
         lv_obj_t* title = lv_label_create(msgbox);
         lv_label_set_text(title, "Confirm Reset");
         lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
         lv_obj_t* text = lv_label_create(msgbox);
-        lv_label_set_text(text, "Are you sure you want to delete all log entries?");
-        lv_obj_align(text, LV_ALIGN_CENTER, 0, 0);
+        lv_label_set_text(text, "Are you sure?");
+        lv_obj_align(text, LV_ALIGN_CENTER, 0, -10);
 
-        lv_obj_t* yes_btn = lv_button_create(msgbox);
+        lv_obj_t* yes_btn = lv_btn_create(msgbox);
         lv_obj_set_size(yes_btn, 80, 40);
-        lv_obj_align(yes_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+        lv_obj_align(yes_btn, LV_ALIGN_BOTTOM_LEFT, 20, -10);
         lv_obj_t* yes_label = lv_label_create(yes_btn);
         lv_label_set_text(yes_label, "Yes");
         lv_obj_center(yes_label);
 
-        lv_obj_t* no_btn = lv_button_create(msgbox);
+        lv_obj_t* no_btn = lv_btn_create(msgbox);
         lv_obj_set_size(no_btn, 80, 40);
-        lv_obj_align(no_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+        lv_obj_align(no_btn, LV_ALIGN_BOTTOM_RIGHT, -20, -10);
         lv_obj_t* no_label = lv_label_create(no_btn);
         lv_label_set_text(no_label, "No");
         lv_obj_center(no_label);
 
         // Yes button event
         lv_obj_add_event_cb(yes_btn, [](lv_event_t* e) {
+            lv_obj_t* confirm_msgbox = lv_obj_get_parent((lv_obj_t*)lv_event_get_target(e)); // Explicit cast
+
+            // Perform SD card reset
             SPI.end();
             delay(100);
             SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
             digitalWrite(SD_SPI_CS_PIN, HIGH);
             delay(100);
             
+            bool reset_success = false;
             if (SD.remove(LOG_FILENAME)) {
                 File file = SD.open(LOG_FILENAME, FILE_WRITE);
                 if (file) {
                     file.println("# Loss Prevention Log - Reset " + getTimestamp());
                     file.close();
                     DEBUG_PRINT("Log file reset successfully");
+                    reset_success = true;
                 }
             } else {
                 DEBUG_PRINT("Failed to reset log file");
@@ -864,18 +873,65 @@ void createViewLogsScreen() {
             digitalWrite(TFT_DC, HIGH);
             
             parsedLogEntries.clear();
-            lv_obj_t* screen_to_delete = lv_scr_act();
-            createViewLogsScreen();
-            if (screen_to_delete && screen_to_delete != lv_scr_act()) {
-                lv_obj_delete(screen_to_delete);
-            }
-            lv_obj_delete((lv_obj_t*)lv_event_get_current_target(e)); // Close msgbox
+
+            // Delete the confirmation dialog
+            lv_obj_delete(confirm_msgbox);
+
+            // Create success dialog
+            lv_obj_t* success_msgbox = lv_msgbox_create(NULL);
+            lv_obj_set_size(success_msgbox, 250, 150);
+            lv_obj_center(success_msgbox);
+            // Remove LV_OBJ_FLAG_MODAL (not available in v9.2.2)
+            lv_obj_set_style_bg_opa(success_msgbox, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_color(success_msgbox, lv_color_hex(0x808080), 0); // Gray tint
+
+            lv_obj_t* success_title = lv_label_create(success_msgbox);
+            lv_label_set_text(success_title, reset_success ? "Reset Successful" : "Reset Failed");
+            lv_obj_align(success_title, LV_ALIGN_TOP_MID, 0, 10);
+
+            lv_obj_t* success_text = lv_label_create(success_msgbox);
+            lv_label_set_text(success_text, reset_success ? "Log has been reset." : "Failed to reset log.");
+            lv_obj_align(success_text, LV_ALIGN_CENTER, 0, -10);
+
+            lv_obj_t* ok_btn = lv_btn_create(success_msgbox);
+            lv_obj_set_size(ok_btn, 80, 40);
+            lv_obj_align(ok_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+            lv_obj_t* ok_label = lv_label_create(ok_btn);
+            lv_label_set_text(ok_label, "OK");
+            lv_obj_center(ok_label);
+
+            // OK button event
+            lv_obj_add_event_cb(ok_btn, [](lv_event_t* e) {
+                lv_obj_t* success_msgbox = lv_obj_get_parent((lv_obj_t*)lv_event_get_target(e)); // Explicit cast
+                lv_obj_t* old_screen = lv_scr_act();
+                
+                // Delete success dialog
+                lv_obj_delete(success_msgbox);
+                
+                // Refresh the screen
+                createViewLogsScreen();
+                
+                // Clean up old screen
+                if (old_screen && old_screen != lv_scr_act()) {
+                    lv_obj_delete(old_screen);
+                }
+                
+                lv_scr_load(lv_scr_act());
+                lv_task_handler();
+            }, LV_EVENT_CLICKED, NULL);
+
+            lv_obj_move_foreground(success_msgbox);
+            lv_task_handler(); // Update UI immediately
         }, LV_EVENT_CLICKED, NULL);
 
         // No button event
         lv_obj_add_event_cb(no_btn, [](lv_event_t* e) {
-            lv_obj_delete((lv_obj_t*)lv_event_get_current_target(e)); // Close msgbox
+            lv_obj_t* msgbox = lv_obj_get_parent((lv_obj_t*)lv_event_get_target(e)); // Explicit cast
+            lv_obj_delete(msgbox); // Just close the msgbox
+            lv_task_handler(); // Ensure UI updates
         }, LV_EVENT_CLICKED, NULL);
+
+        lv_obj_move_foreground(msgbox); // Ensure confirmation msgbox is on top
     }, LV_EVENT_CLICKED, NULL);
     
     lv_scr_load(logs_screen);
@@ -1004,6 +1060,30 @@ void setup() {
     M5.begin(cfg);
     M5.Power.begin();
 
+    // Initialize LVGL and display driver
+    DEBUG_PRINT("Before lv_init");
+    lv_init();
+    m5gfx_lvgl_init();
+    DEBUG_PRINT("After lv_init");
+
+    // Initialize file system after display is set up
+    initFileSystem();
+    
+    xTaskCreatePinnedToCore(
+        lvgl_task,          // Task function
+        "lvgl",             // Task name
+        LVGL_STACK_SIZE,    // Stack size
+        NULL,               // Parameters
+        LVGL_TASK_PRIORITY, // Priority
+        NULL,               // Task handle
+        LVGL_TASK_CORE     // Core ID
+  );   DEBUG_PRINT("LVGL task created");
+
+    initStyles();
+    
+    // Show loading screen instead of directly creating main menu
+    createLoadingScreen();
+
     // Enable external bus power (unchanged)
     M5.Power.setExtOutput(true);
     Serial.println("External bus power enabled: " + String(M5.Power.getExtOutput() ? "Yes" : "No"));
@@ -1042,22 +1122,6 @@ void setup() {
     DEBUG_PRINTF("Loaded Brightness settings - Brightness: %d\n", displayBrightness);
     prefs.end();
 
-    // Initialize LVGL and display driver
-    DEBUG_PRINT("Before lv_init");
-    lv_init();
-    m5gfx_lvgl_init();
-    DEBUG_PRINT("After lv_init");
-
-    xTaskCreatePinnedToCore(
-        lvgl_task,          // Task function
-        "lvgl",             // Task name
-        LVGL_STACK_SIZE,    // Stack size
-        NULL,               // Parameters
-        LVGL_TASK_PRIORITY, // Priority
-        NULL,               // Task handle
-        LVGL_TASK_CORE     // Core ID
-  );   DEBUG_PRINT("LVGL task created");
-
     // Set initial RTC time if unset
     m5::rtc_date_t DateStruct;
     M5.Rtc.getDate(&DateStruct);
@@ -1084,17 +1148,8 @@ void setup() {
     loadSavedNetworks();
     DEBUG_PRINT("WiFi Manager initialized");
 
-    // Initialize file system after display is set up
-    initFileSystem();
-
-    initStyles();
-    
-    // Show loading screen instead of directly creating main menu
-    createLoadingScreen();
-    
     DEBUG_PRINT("Setup complete!");
 }
-
 
 // Simplified loop function
 void loop() {
@@ -1746,15 +1801,12 @@ void createColorMenuShirt() {
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_16, 0);
     lv_obj_center(back_label);
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            lv_obj_t* old_menu = colorMenu;
-            colorMenu = nullptr;
-            selectedShirtColors = "";
-            createGenderMenu();
-            if (old_menu && old_menu != lv_scr_act()) {
-                lv_obj_del_async(old_menu);
-            }
-            xSemaphoreGive(xGuiSemaphore);
+        lv_obj_t* old_menu = colorMenu;
+        colorMenu = nullptr;
+        selectedShirtColors = "";
+        createGenderMenu();
+        if (old_menu && old_menu != lv_scr_act()) {
+            lv_obj_del_async(old_menu);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Back button created");
@@ -1775,26 +1827,23 @@ void createColorMenuShirt() {
     lv_obj_set_style_text_font(next_label, &lv_font_montserrat_16, 0);
     lv_obj_center(next_label);
     lv_obj_add_event_cb(shirt_next_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            if (selectedShirtColors.isEmpty()) {
-                lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
-                lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
-                lv_timer_create([](lv_timer_t* timer) {
-                    lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
-                    lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
-                    lv_timer_del(timer);
-                }, 200, header);
-            } else {
-                lv_obj_t* old_menu = colorMenu;
-                colorMenu = nullptr;
-                currentEntry += selectedShirtColors + ",";
-                DEBUG_PRINTF("Transitioning to pants menu with Shirt: %s\n", selectedShirtColors.c_str());
-                createColorMenuPants();
-                if (old_menu && old_menu != lv_scr_act()) {
-                    lv_obj_del_async(old_menu);
-                }
+        if (selectedShirtColors.isEmpty()) {
+            lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
+            lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
+            lv_timer_create([](lv_timer_t* timer) {
+                lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+                lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
+                lv_timer_del(timer);
+            }, 200, header);
+        } else {
+            lv_obj_t* old_menu = colorMenu;
+            colorMenu = nullptr;
+            currentEntry += selectedShirtColors + ",";
+            DEBUG_PRINTF("Transitioning to pants menu with Shirt: %s\n", selectedShirtColors.c_str());
+            createColorMenuPants();
+            if (old_menu && old_menu != lv_scr_act()) {
+                lv_obj_del_async(old_menu);
             }
-            xSemaphoreGive(xGuiSemaphore);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Next button created");
@@ -1945,15 +1994,12 @@ void createColorMenuPants() {
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_16, 0);
     lv_obj_center(back_label);
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            lv_obj_t* old_menu = colorMenu;
-            colorMenu = nullptr;
-            selectedPantsColors = "";
-            createColorMenuShirt();
-            if (old_menu && old_menu != lv_scr_act()) {
-                lv_obj_del_async(old_menu);
-            }
-            xSemaphoreGive(xGuiSemaphore);
+        lv_obj_t* old_menu = colorMenu;
+        colorMenu = nullptr;
+        selectedPantsColors = "";
+        createColorMenuShirt();
+        if (old_menu && old_menu != lv_scr_act()) {
+            lv_obj_del_async(old_menu);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Back button created");
@@ -1974,26 +2020,23 @@ void createColorMenuPants() {
     lv_obj_set_style_text_font(next_label, &lv_font_montserrat_16, 0);
     lv_obj_center(next_label);
     lv_obj_add_event_cb(pants_next_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            if (selectedPantsColors.isEmpty()) {
-                lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
-                lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
-                lv_timer_create([](lv_timer_t* timer) {
-                    lv_obj_t* header = (lv_obj_t*)lv_timer_get_user_data(timer);
-                    lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
-                    lv_timer_del(timer);
-                }, 200, header);
-            } else {
-                lv_obj_t* old_menu = colorMenu;
-                colorMenu = nullptr;
-                currentEntry += selectedPantsColors + ",";
-                DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s\n", selectedPantsColors.c_str());
-                createColorMenuShoes();
-                if (old_menu && old_menu != lv_scr_act()) {
-                    lv_obj_del_async(old_menu);
-                }
+        if (selectedPantsColors.isEmpty()) {
+            lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
+            lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
+            lv_timer_create([](lv_timer_t* timer) {
+                lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+                lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
+                lv_timer_del(timer);
+            }, 200, header);
+        } else {
+            lv_obj_t* old_menu = colorMenu;
+            colorMenu = nullptr;
+            currentEntry += selectedPantsColors + ",";
+            DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s\n", selectedPantsColors.c_str());
+            createColorMenuShoes();
+            if (old_menu && old_menu != lv_scr_act()) {
+                lv_obj_del_async(old_menu);
             }
-            xSemaphoreGive(xGuiSemaphore);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Next button created");
@@ -2143,15 +2186,12 @@ void createColorMenuShoes() {
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_16, 0);
     lv_obj_center(back_label);
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            lv_obj_t* old_menu = colorMenu;
-            colorMenu = nullptr;
-            selectedShoesColors = "";
-            createColorMenuPants();
-            if (old_menu && old_menu != lv_scr_act()) {
-                lv_obj_del_async(old_menu);
-            }
-            xSemaphoreGive(xGuiSemaphore);
+        lv_obj_t* old_menu = colorMenu;
+        colorMenu = nullptr;
+        selectedShoesColors = "";
+        createColorMenuPants();
+        if (old_menu && old_menu != lv_scr_act()) {
+            lv_obj_del_async(old_menu);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Back button created");
@@ -2172,27 +2212,23 @@ void createColorMenuShoes() {
     lv_obj_set_style_text_font(next_label, &lv_font_montserrat_16, 0);
     lv_obj_center(next_label);
     lv_obj_add_event_cb(shoes_next_btn, [](lv_event_t* e) {
-        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-            if (selectedShoesColors.isEmpty()) {
-                lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
-                lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
-                lv_timer_create([](lv_timer_t* timer) {
-                    lv_obj_t* header = (lv_obj_t*)lv_timer_get_user_data(timer);
-                    lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
-                    lv_timer_del(timer);
-                }, 200, header);
-            } else {
-                lv_obj_t* old_menu = colorMenu;
-                colorMenu = nullptr;
-                currentEntry += selectedShoesColors + ",";
-                DEBUG_PRINTF("Transitioning to next menu with Shoes: %s\n", selectedShoesColors.c_str());
-                // Replace with your next menu function, e.g., createSummaryMenu()
-                createItemMenu(); // Placeholder - adjust as needed
-                if (old_menu && old_menu != lv_scr_act()) {
-                    lv_obj_del_async(old_menu);
-                }
+        if (selectedShoesColors.isEmpty()) {
+            lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
+            lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
+            lv_timer_create([](lv_timer_t* timer) {
+                lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+                lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
+                lv_timer_del(timer);
+            }, 200, header);
+        } else {
+            lv_obj_t* old_menu = colorMenu;
+            colorMenu = nullptr;
+            currentEntry += selectedShoesColors + ",";
+            DEBUG_PRINTF("Transitioning to item menu with Shoes: %s\n", selectedShoesColors.c_str());
+            createItemMenu();
+            if (old_menu && old_menu != lv_scr_act()) {
+                lv_obj_del_async(old_menu);
             }
-            xSemaphoreGive(xGuiSemaphore);
         }
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Next button created");
@@ -2825,52 +2861,53 @@ void createWiFiScreen() {
         lv_obj_clean(wifi_list);
         lv_label_set_text(wifi_status_label, "Scanning...");
         
-        // Create spinner to indicate scanning
-        if (g_spinner == nullptr) {
-            g_spinner = lv_spinner_create(wifi_screen);
-            lv_obj_set_size(g_spinner, 50, 50);
-            lv_obj_align(g_spinner, LV_ALIGN_CENTER, 0, 0);
-            lv_spinner_set_anim_params(g_spinner, 1000, 60);
+        // Delete any previous spinner
+        if (g_spinner != nullptr) {
+            lv_obj_del(g_spinner);
         }
         
-        // Start scan
-        wifiManager.startScan();
+        // Create new spinner
+        g_spinner = lv_spinner_create(wifi_screen);
+        lv_obj_set_size(g_spinner, 50, 50);
+        lv_obj_align(g_spinner, LV_ALIGN_CENTER, 0, 0);
+        lv_spinner_set_anim_params(g_spinner, 1000, 60);
         
-        // Create a timeout timer
-        static uint32_t scan_start_time = 0;
-        scan_start_time = millis();
-        
+        // Delete any previous scan timer
         if (scan_timer != nullptr) {
             lv_timer_del(scan_timer);
             scan_timer = nullptr;
         }
         
+        // Start new scan
+        if (!wifiManager.startScan()) {
+            lv_label_set_text(wifi_status_label, "Failed to start scan");
+            if (g_spinner != nullptr) {
+                lv_obj_del(g_spinner);
+                g_spinner = nullptr;
+            }
+            return;
+        }
+        
+        // Create new timeout timer
+        uint32_t* start_time = new uint32_t(millis());
         scan_timer = lv_timer_create([](lv_timer_t* timer) {
-            static uint32_t* start_time_ptr = (uint32_t*)lv_timer_get_user_data(timer);
-            uint32_t elapsed = millis() - *start_time_ptr;
-            
-            // Check if scan is taking too long (more than 10 seconds)
-            if (elapsed > 10000) {
-                // Update status label
+            uint32_t* start_time_ptr = (uint32_t*)lv_timer_get_user_data(timer);
+            if (millis() - *start_time_ptr > 10000) { // 10 second timeout
                 if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
                     lv_label_set_text(wifi_status_label, "Scan timed out. Try again.");
                 }
-                
-                // Remove spinner
                 if (g_spinner && lv_obj_is_valid(g_spinner)) {
                     lv_obj_del(g_spinner);
                     g_spinner = nullptr;
                 }
-                
-                // Delete timer
                 lv_timer_del(timer);
                 scan_timer = nullptr;
+                delete start_time_ptr;
             }
-        }, 1000, &scan_start_time);
+        }, 1000, start_time);
     }, LV_EVENT_CLICKED, NULL);
 
     lv_scr_load(wifi_screen);
-    wifiManager.startScan(); // Start scan on screen load
 }
 
 static void connect_btn_event_cb(lv_event_t* e) {
@@ -3358,15 +3395,21 @@ void onWiFiScanComplete(const std::vector<NetworkInfo>& results) {
             lv_obj_t* btn = lv_list_add_btn(wifi_list, LV_SYMBOL_WIFI, displayText.c_str());
             lv_obj_add_style(btn, &style_btn, 0);
             
-            // Add click event
+            // Add click event with fix to defer UI update
             lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-                const char* text = lv_list_get_btn_text(wifi_list, (lv_obj_t*)lv_event_get_target(e));
+                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+                const char* text = lv_list_get_btn_text(wifi_list, btn);
                 String ssid = String(text);
                 int idx = ssid.indexOf(" *");
                 if (idx != -1) ssid = ssid.substring(0, idx);
                 strncpy(selected_ssid, ssid.c_str(), sizeof(selected_ssid) - 1);
                 selected_ssid[sizeof(selected_ssid) - 1] = '\0';
-                showWiFiKeyboard();
+                
+                // Delay UI updates to avoid rendering conflicts
+                lv_timer_create([](lv_timer_t* timer) {
+                    showWiFiKeyboard();
+                    lv_timer_del(timer);
+                }, 10, NULL);
             }, LV_EVENT_CLICKED, NULL);
         }
     lv_label_set_text(wifi_status_label, "Scan complete");
