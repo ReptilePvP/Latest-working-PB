@@ -34,7 +34,7 @@ The Loss Prevention Log system is an embedded IoT solution built on the M5Stack 
 ### Required Libraries
 - M5Unified (1.0.0 or later)
 - M5GFX (0.1.6 or later)
-- LVGL (8.4.0)
+- LVGL (9.2.2)
 - WiFi (Arduino ESP32 core)
 - Preferences (Arduino ESP32 core)
 - SPI (Arduino ESP32 core)

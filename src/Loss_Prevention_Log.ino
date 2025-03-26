@@ -3,7 +3,7 @@
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <M5Unified.h>
-#include "m5gfx_lvgl.hpp"
+#include "m5gfx_lvgl.hpp" // Includes extern SemaphoreHandle_t xGuiSemaphore;
 #include <WiFi.h>
 #include <Preferences.h>
 #include <SPI.h>
@@ -270,7 +270,7 @@ lv_obj_t* wifi_loading_label = nullptr;
 lv_obj_t* wifi_result_label = nullptr;
 
 const char* shirtColors[] = {
-    "Red", "Orange", "Yellow", "Green", "Blue", "Purple", 
+    "Red", "Orange", "Yellow", "Green", "Blue", "Purple",
     "Black", "White"
 };
 
@@ -294,8 +294,25 @@ lv_obj_t *wifi_list = nullptr;
 lv_obj_t *wifi_status_label = nullptr;
 lv_obj_t *saved_networks_list = nullptr;
 
-// WiFi UI components
-static lv_obj_t* wifi_keyboard = nullptr;
+    // WiFi UI components
+    static lv_obj_t* wifi_keyboard = nullptr;
+
+    // WiFi icon states
+    struct WiFiIconState {
+        bool connected;
+        int strength;
+        uint32_t color;
+    };
+
+    static WiFiIconState currentWiFiState = {
+        .connected = false,
+        .strength = 0,
+        .color = 0xFF0000
+    };
+
+    // GUI Semaphore for thread-safe LVGL updates
+    // static SemaphoreHandle_t xGuiSemaphore = nullptr; // <<< REMOVED: Use extern from m5gfx_lvgl.hpp
+
 
 // Battery monitoring
 static int lastBatteryLevel = -1;
@@ -316,9 +333,9 @@ static int keyboard_page_index = 0;
 
 // Control map for button matrix
 const lv_btnmatrix_ctrl_t keyboard_ctrl_map[] = {
-    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, 
-    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, 
-    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, 
+    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER,
+    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER,
+    LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER, LV_BTNMATRIX_CTRL_POPOVER,
     LV_BTNMATRIX_CTRL_CHECKABLE, LV_BTNMATRIX_CTRL_CHECKED, LV_BTNMATRIX_CTRL_CHECKED, LV_BTNMATRIX_CTRL_CHECKED  // Changed last row controls for special keys
 };
 
@@ -398,7 +415,7 @@ time_t parseTimestamp(const String& entry) {
         timeinfo.tm_isdst = -1; // Let mktime figure out DST
 
         // Convert 3-letter month abbreviation to month number (0-11)
-        static const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+        static const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
         for (int i = 0; i < 12; i++) {
             if (strncmp(monthStr, months[i], 3) == 0) {
@@ -444,14 +461,14 @@ bool appendToLog(const String& entry) {
             return false;
         }
     }
-    
+
     SPI.end();
     delay(100);
     SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, -1);
     pinMode(SD_SPI_CS_PIN, OUTPUT);
     digitalWrite(SD_SPI_CS_PIN, HIGH);
     delay(100);
-    
+
     File file = SD.open(LOG_FILENAME, FILE_APPEND);
     if (!file) {
         DEBUG_PRINT("Failed to open log file for writing");
@@ -461,23 +478,23 @@ bool appendToLog(const String& entry) {
         digitalWrite(TFT_DC, HIGH);
         return false;
     }
-    
+
     String timestamp = getTimestamp();
     String formattedEntry = timestamp + ": " + entry; // e.g., "05-Mar-2025 14:31:53: Male,Blue+Green+Red+Orange,..."
     DEBUG_PRINTF("Raw entry text: %s\n", formattedEntry.c_str());
     size_t bytesWritten = file.println(formattedEntry);
     file.close();
-    
+
     SPI_SD.end();
     SPI.begin();
     pinMode(TFT_DC, OUTPUT);
     digitalWrite(TFT_DC, HIGH);
-    
+
     if (bytesWritten == 0) {
         DEBUG_PRINT("Failed to write to log file");
         return false;
     }
-    
+
     DEBUG_PRINTF("Entry saved to file (%d bytes): %s\n", bytesWritten, formattedEntry.c_str());
     return true;
 }
@@ -486,9 +503,9 @@ bool appendToLog(const String& entry) {
 void saveEntry(const String& entry) {
     Serial.println("New Entry:");
     Serial.println(entry);
-    
+
     bool saved = appendToLog(entry); // Save to SD card
-    
+
     if (WiFi.status() == WL_CONNECTED) {
         sendWebhook(entry); // Send to Discord
         if (saved) {
@@ -534,7 +551,7 @@ void createViewLogsScreen() {
     // Get current time from RTC
     m5::rtc_date_t currentDateStruct;
     M5.Rtc.getDate(&currentDateStruct); // Fixed typo
-    
+
     struct tm currentTimeInfo = {0};
     currentTimeInfo.tm_year = currentDateStruct.year - 1900;
     currentTimeInfo.tm_mon = currentDateStruct.month - 1;
@@ -543,7 +560,7 @@ void createViewLogsScreen() {
     currentTimeInfo.tm_min = 0;
     currentTimeInfo.tm_sec = 0;
     time_t now = mktime(&currentTimeInfo); // Fixed typo
-    
+
     char current_time[25];
     strftime(current_time, sizeof(current_time), "%d-%b-%Y %H:%M:%S", localtime(&now));
     DEBUG_PRINTF("Current RTC date for log filtering: %s\n", current_time);
@@ -629,7 +646,7 @@ void createViewLogsScreen() {
                 DEBUG_PRINTF("Matched entry for %s: %s\n", tab_names[i], entry.text.c_str());
             }
         }
-        std::sort(entries_by_day[i].begin(), entries_by_day[i].end(), 
+        std::sort(entries_by_day[i].begin(), entries_by_day[i].end(),
             [](const LogEntry* a, const LogEntry* b) {
                 return a->timestamp < b->timestamp;
             });
@@ -677,7 +694,7 @@ void createViewLogsScreen() {
                 lv_obj_add_event_cb(entry_btn, [](lv_event_t* e) {
                     lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
                     LogEntry* entry = (LogEntry*)lv_obj_get_user_data(btn);
-                    
+
                     if (!entry || entry->text.isEmpty()) {
                         DEBUG_PRINT("Invalid entry pointer or empty text");
                         lv_obj_t* msgbox = lv_msgbox_create(NULL);
@@ -700,14 +717,14 @@ void createViewLogsScreen() {
                         }, LV_EVENT_CLICKED, NULL);
                         return;
                     }
-                    
+
                     DEBUG_PRINTF("Raw entry text: %s\n", entry->text.c_str());
-                    
+
                     int colon_pos = entry->text.indexOf(": ");
                     if (colon_pos != -1 && colon_pos < entry->text.length() - 2) {
                         String entry_data = entry->text.substring(colon_pos + 2);
                         DEBUG_PRINTF("Extracted entry data: %s\n", entry_data.c_str());
-                        
+
                         if (entry_data.isEmpty()) {
                             DEBUG_PRINT("Empty entry data after timestamp");
                             lv_obj_t* msgbox = lv_msgbox_create(NULL);
@@ -730,10 +747,10 @@ void createViewLogsScreen() {
                             }, LV_EVENT_CLICKED, NULL);
                             return;
                         }
-                        
+
                         String formatted_entry = getFormattedEntry(entry_data);
                         DEBUG_PRINTF("Formatted: %s\n", formatted_entry.c_str());
-                        
+
                         lv_obj_t* msgbox = lv_msgbox_create(NULL);
                         lv_obj_set_size(msgbox, 280, 180);
                         lv_obj_center(msgbox);
@@ -756,7 +773,7 @@ void createViewLogsScreen() {
                             lv_obj_delete((lv_obj_t*)lv_event_get_current_target(e));
                         }, LV_EVENT_CLICKED, NULL);
                     } else {
-                        DEBUG_PRINTF("Invalid log entry format - colon_pos: %d, text length: %d\n", 
+                        DEBUG_PRINTF("Invalid log entry format - colon_pos: %d, text length: %d\n",
                                     colon_pos, entry->text.length());
                         lv_obj_t* msgbox = lv_msgbox_create(NULL);
                         lv_obj_set_size(msgbox, 280, 180);
@@ -779,7 +796,7 @@ void createViewLogsScreen() {
                         }, LV_EVENT_CLICKED, NULL);
                     }
                 }, LV_EVENT_CLICKED, NULL);
-                
+
                 y_pos += 30;
             }
         }
@@ -795,12 +812,12 @@ void createViewLogsScreen() {
     lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
     lv_obj_center(back_label);
     lv_obj_move_foreground(back_btn);
-    
+
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
         DEBUG_PRINT("Returning to main menu from logs");
         createMainMenu();
     }, LV_EVENT_CLICKED, NULL);
-    
+
     // Reset button with success dialog
     lv_obj_t* reset_btn = lv_btn_create(logs_screen);
     lv_obj_set_size(reset_btn, 80, 40);
@@ -811,7 +828,7 @@ void createViewLogsScreen() {
     lv_label_set_text(reset_label, "Reset");
     lv_obj_center(reset_label);
     lv_obj_move_foreground(reset_btn);
-    
+
     lv_obj_add_event_cb(reset_btn, [](lv_event_t* e) {
         // Create custom message box for confirmation
         lv_obj_t* msgbox = lv_msgbox_create(NULL);
@@ -853,7 +870,7 @@ void createViewLogsScreen() {
             SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
             digitalWrite(SD_SPI_CS_PIN, HIGH);
             delay(100);
-            
+
             bool reset_success = false;
             if (SD.remove(LOG_FILENAME)) {
                 File file = SD.open(LOG_FILENAME, FILE_WRITE);
@@ -866,12 +883,12 @@ void createViewLogsScreen() {
             } else {
                 DEBUG_PRINT("Failed to reset log file");
             }
-            
+
             SPI_SD.end();
             SPI.begin();
             pinMode(TFT_DC, OUTPUT);
             digitalWrite(TFT_DC, HIGH);
-            
+
             parsedLogEntries.clear();
 
             // Delete the confirmation dialog
@@ -904,18 +921,18 @@ void createViewLogsScreen() {
             lv_obj_add_event_cb(ok_btn, [](lv_event_t* e) {
                 lv_obj_t* success_msgbox = lv_obj_get_parent((lv_obj_t*)lv_event_get_target(e)); // Explicit cast
                 lv_obj_t* old_screen = lv_scr_act();
-                
+
                 // Delete success dialog
                 lv_obj_delete(success_msgbox);
-                
+
                 // Refresh the screen
                 createViewLogsScreen();
-                
+
                 // Clean up old screen
                 if (old_screen && old_screen != lv_scr_act()) {
                     lv_obj_delete(old_screen);
                 }
-                
+
                 lv_scr_load(lv_scr_act());
                 lv_task_handler();
             }, LV_EVENT_CLICKED, NULL);
@@ -933,7 +950,7 @@ void createViewLogsScreen() {
 
         lv_obj_move_foreground(msgbox); // Ensure confirmation msgbox is on top
     }, LV_EVENT_CLICKED, NULL);
-    
+
     lv_scr_load(logs_screen);
     lv_task_handler();
     DEBUG_PRINT("View logs screen created successfully");
@@ -951,21 +968,21 @@ void initFileSystem() {
         DEBUG_PRINT("File system already initialized");
         return;
     }
-    
+
     DEBUG_PRINT("Initializing SD card...");
-    
+
     // Stop the default SPI (used by LCD)
     SPI.end();
     delay(200); // Give it a moment to settle
-    
+
     // Start custom SPI for SD card
     SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, -1); // -1 means no default CS
     pinMode(SD_SPI_CS_PIN, OUTPUT); // Set CS pin (4) as OUTPUT
     digitalWrite(SD_SPI_CS_PIN, HIGH); // Deselect SD card (HIGH = off)
     delay(200); // Wait for SD card to stabilize
-    
+
     bool sdInitialized = false;
-    
+
     // Try initializing the SD card up to 3 times
     for (int i = 0; i < 3 && !sdInitialized; i++) {
         DEBUG_PRINTF("Attempt %d: Initializing SD at 2 MHz...\n", i + 1);
@@ -975,7 +992,7 @@ void initFileSystem() {
             delay(100); // Short delay before retrying
         }
     }
-    
+
     if (!sdInitialized) {
         DEBUG_PRINT("All SD card initialization attempts failed");
         // Show error message on screen
@@ -1005,7 +1022,7 @@ void initFileSystem() {
         lv_obj_add_event_cb(close_btn, [](lv_event_t* e) {
             lv_obj_delete((lv_obj_t*)lv_event_get_current_target(e)); // Close msgbox
         }, LV_EVENT_CLICKED, NULL);
-        
+
         // Clean up and switch back to LCD mode
         SPI_SD.end();
         SPI.begin();
@@ -1013,10 +1030,10 @@ void initFileSystem() {
         digitalWrite(TFT_DC, HIGH);
         return;
     }
-    
+
     DEBUG_PRINT("SD card initialized successfully");
     fileSystemInitialized = true;
-    
+
     // Check card type and print info
     uint8_t cardType = SD.cardType();
     if (cardType == CARD_NONE) {
@@ -1032,11 +1049,11 @@ void initFileSystem() {
         } else {
             DEBUG_PRINT("UNKNOWN");
         }
-        
+
         uint64_t cardSize = SD.cardSize() / (1024 * 1024);
         DEBUG_PRINTF("SD Card Size: %lluMB\n", cardSize);
     }
-    
+
     // Switch back to LCD mode after initialization
     SPI_SD.end();
     SPI.begin();
@@ -1068,7 +1085,7 @@ void setup() {
 
     // Initialize file system after display is set up
     initFileSystem();
-    
+
     xTaskCreatePinnedToCore(
         lvgl_task,          // Task function
         "lvgl",             // Task name
@@ -1080,7 +1097,7 @@ void setup() {
   );   DEBUG_PRINT("LVGL task created");
 
     initStyles();
-    
+
     // Show loading screen instead of directly creating main menu
     createLoadingScreen();
 
@@ -1193,12 +1210,12 @@ void loop() {
                     int rssi = WiFi.RSSI();
                     int wifi_strength = map(rssi, -100, -50, 0, 100);
                     wifi_strength = constrain(wifi_strength, 0, 100);
-                    
+
                     // Update WiFi text percentage
                     char wifi_text[16];
                     snprintf(wifi_text, sizeof(wifi_text), "%d%%", wifi_strength);
                     lv_label_set_text(wifi_label, wifi_text);
-                    
+
                     // Determine color based on connection quality
                     uint32_t wifi_color;
                     if (WiFi.status() != WL_CONNECTED) {
@@ -1211,11 +1228,11 @@ void loop() {
                         wifi_color = 0x00FF00; // Green for good connection
                     }
                     lv_obj_set_style_text_color(wifi_label, lv_color_hex(wifi_color), 0);
-                    
+
                     // Update WiFi bars
                     lv_obj_t* wifi_card = lv_obj_get_parent(wifi_label);
                     lv_obj_t* wifi_container = lv_obj_get_child(wifi_card, 0);
-                    
+
                     if (wifi_container && lv_obj_is_valid(wifi_container)) {
                         const int BAR_COUNT = 4;
                         for (int i = 0; i < BAR_COUNT; i++) {
@@ -1241,6 +1258,7 @@ void loop() {
 
     delay(5); // Small delay for stability
 }
+
 
 // Swipe left function
 void handleSwipeLeft() {
@@ -3343,76 +3361,198 @@ void sendWebhook(const String& entry) {
 }
 
 // Callback for status updates
+// Define a static callback function for the LVGL timer
+static void wifi_status_update_cb(lv_timer_t* timer) {
+    // Retrieve the state passed as user data
+    WiFiState state = (WiFiState)(uintptr_t)lv_timer_get_user_data(timer);
+
+    // Safely take the semaphore for UI updates
+    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
+        // Update status bar if visible (uses global variables)
+        if (status_bar && lv_obj_is_valid(status_bar)) {
+            // Check if current_status_msg is valid before using it
+            if (strlen(current_status_msg) > 0) {
+                 lv_label_set_text(status_bar, current_status_msg);
+                 lv_obj_set_style_text_color(status_bar, lv_color_hex(current_status_color), 0);
+            } else {
+                 // Optionally set a default message if current_status_msg is empty
+                 lv_label_set_text(status_bar, "Status...");
+                 lv_obj_set_style_text_color(status_bar, lv_color_hex(0xFFFFFF), 0);
+            }
+        }
+
+        // Update WiFi icons/indicators if on main screen (uses global currentWiFiState)
+        if (main_menu_screen && lv_obj_is_valid(main_menu_screen) && lv_scr_act() == main_menu_screen) {
+            // Update WiFi label if it exists
+            if (wifi_label && lv_obj_is_valid(wifi_label)) {
+                char wifi_text[16];
+                snprintf(wifi_text, sizeof(wifi_text), "%d%%", currentWiFiState.strength);
+                lv_label_set_text(wifi_label, wifi_text);
+                lv_obj_set_style_text_color(wifi_label, lv_color_hex(currentWiFiState.color), 0);
+            }
+
+            // Update WiFi bars
+            lv_obj_t* wifi_card = (wifi_label && lv_obj_is_valid(wifi_label)) ? lv_obj_get_parent(wifi_label) : nullptr; // Check wifi_label validity
+            if (wifi_card && lv_obj_is_valid(wifi_card)) {
+                lv_obj_t* wifi_container = lv_obj_get_child(wifi_card, 0); // Assumes container is the first child
+                if (wifi_container && lv_obj_is_valid(wifi_container)) {
+                    const int BAR_COUNT = 4;
+                    for (int i = 0; i < BAR_COUNT; i++) {
+                        lv_obj_t* bar = lv_obj_get_child(wifi_container, i);
+                        if (bar && lv_obj_is_valid(bar)) {
+                            bool active = currentWiFiState.connected &&
+                                          currentWiFiState.strength > (i + 1) * (100 / BAR_COUNT);
+                            lv_obj_set_style_bg_color(bar,
+                                active ? lv_color_hex(currentWiFiState.color) : lv_color_hex(0x666666), 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update loading screen if active
+        if (wifi_loading_screen && lv_obj_is_valid(wifi_loading_screen) &&
+            lv_scr_act() == wifi_loading_screen) {
+            if (currentWiFiState.connected) { // Use the global state for consistency here
+                updateWiFiLoadingScreen(true, "WiFi Connected!");
+            } else if (state == WiFiState::WIFI_CONNECTION_FAILED) { // Use the state passed via timer
+                updateWiFiLoadingScreen(false, "Connection Failed!");
+            }
+        }
+
+        xSemaphoreGive(xGuiSemaphore); // Release the semaphore
+    } else {
+        DEBUG_PRINT("Failed to take xGuiSemaphore in wifi_status_update_cb");
+    }
+
+
+    // Delete the timer itself after execution
+    lv_timer_del(timer);
+}
+
+// Callback for status updates from WiFiManager
 void onWiFiStatus(WiFiState state, const String& message) {
     DEBUG_PRINTF("WiFi Status: %s - %s\n", wifiManager.getStateString().c_str(), message.c_str());
-    
-    // Update status bar if visible
-    if (status_bar) {
-        lv_label_set_text(status_bar, message.c_str());
-        lv_obj_set_style_text_color(status_bar, 
-            state == WiFiState::WIFI_CONNECTED ? lv_color_hex(0x00FF00) : 
-            state == WiFiState::WIFI_CONNECTING ? lv_color_hex(0xFFFF00) : 
-            lv_color_hex(0xFF0000), 0);
-    }
-    
-    // Update loading screen if active
-    if (wifi_loading_screen != nullptr && lv_obj_is_valid(wifi_loading_screen) && 
-        lv_scr_act() == wifi_loading_screen) {
-        if (state == WiFiState::WIFI_CONNECTED) {
-            updateWiFiLoadingScreen(true, "WiFi Connected!");
-        } else if (state == WiFiState::WIFI_DISCONNECTED && 
-                  (message.indexOf("failed") >= 0 || message.indexOf("Failed") >= 0)) {
-            updateWiFiLoadingScreen(false, "Connection Failed!");
+
+    // Update the global currentWiFiState based on the received state
+    // (This part seems correct as it was)
+    currentWiFiState.connected = (state == WiFiState::WIFI_CONNECTED);
+    if (currentWiFiState.connected) {
+        int rssi = wifiManager.getRSSI();
+        currentWiFiState.strength = map(rssi, -100, -50, 0, 100);
+        currentWiFiState.strength = constrain(currentWiFiState.strength, 0, 100);
+
+        if (currentWiFiState.strength < 30) {
+            currentWiFiState.color = 0xFF0000;  // Red
+        } else if (currentWiFiState.strength < 70) {
+            currentWiFiState.color = 0xFFAA00;  // Orange
+        } else {
+            currentWiFiState.color = 0x00FF00;  // Green
         }
+    } else {
+        currentWiFiState.strength = 0;
+        currentWiFiState.color = 0xFF0000;  // Red
     }
+
+    // Also update the global status message and color (if needed, though seems unused by timer callback)
+    strncpy(current_status_msg, message.c_str(), sizeof(current_status_msg) - 1);
+    current_status_msg[sizeof(current_status_msg) - 1] = '\0'; // Ensure null termination
+    current_status_color = (state == WiFiState::WIFI_CONNECTED) ? 0x00FF00 :
+                           (state == WiFiState::WIFI_CONNECTION_FAILED) ? 0xFF0000 :
+                           0xFFFFFF; // Default white
+
+
+    // Safely schedule UI update using LVGL timer
+    // Pass the 'state' variable as user data, casting it to void*
+    lv_timer_create(wifi_status_update_cb, 10, (void*)(uintptr_t)state);
 }
 // Callback for scan results
 void onWiFiScanComplete(const std::vector<NetworkInfo>& results) {
-    if (wifi_screen && lv_obj_is_valid(wifi_screen)) {
-        // Remove spinner if it exists
-        if (g_spinner != nullptr) {
-            lv_obj_del(g_spinner);
-            g_spinner = nullptr;
-        }
-        
-        lv_obj_clean(wifi_list);
-        
-        if (results.empty()) {
-            lv_label_set_text(wifi_status_label, "No networks found");
-            return;
-        }
-        
-        lv_label_set_text(wifi_status_label, "Select a network");
-        
-        for (const auto& net : results) {
-            if (net.ssid.isEmpty()) continue; // Skip empty SSIDs
-            
-            String displayText = net.ssid;
-            if (net.encryptionType != WIFI_AUTH_OPEN) {
-                displayText += " *";
+    // Safely take semaphore if accessing shared UI elements like wifi_list
+    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
+        if (wifi_screen && lv_obj_is_valid(wifi_screen) && lv_scr_act() == wifi_screen) { // Check if screen is active
+            // Remove spinner if it exists
+            if (g_spinner != nullptr && lv_obj_is_valid(g_spinner)) {
+                lv_obj_del(g_spinner);
+                g_spinner = nullptr;
             }
-            
-            lv_obj_t* btn = lv_list_add_btn(wifi_list, LV_SYMBOL_WIFI, displayText.c_str());
-            lv_obj_add_style(btn, &style_btn, 0);
-            
-            // Add click event with fix to defer UI update
-            lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
-                const char* text = lv_list_get_btn_text(wifi_list, btn);
-                String ssid = String(text);
-                int idx = ssid.indexOf(" *");
-                if (idx != -1) ssid = ssid.substring(0, idx);
-                strncpy(selected_ssid, ssid.c_str(), sizeof(selected_ssid) - 1);
-                selected_ssid[sizeof(selected_ssid) - 1] = '\0';
-                
-                // Delay UI updates to avoid rendering conflicts
-                lv_timer_create([](lv_timer_t* timer) {
-                    showWiFiKeyboard();
-                    lv_timer_del(timer);
-                }, 10, NULL);
-            }, LV_EVENT_CLICKED, NULL);
+
+            // Clear the list before adding new items
+            if (wifi_list && lv_obj_is_valid(wifi_list)) {
+                lv_obj_clean(wifi_list);
+            } else {
+                // If wifi_list is somehow invalid, maybe recreate it or log error
+                DEBUG_PRINT("Error: wifi_list is invalid in onWiFiScanComplete");
+                xSemaphoreGive(xGuiSemaphore);
+                return; // Exit if list is invalid
+            }
+
+            // Update the status label
+            if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
+                if (results.empty()) {
+                    lv_label_set_text(wifi_status_label, "No networks found");
+                } else {
+                    lv_label_set_text(wifi_status_label, "Select a network");
+                }
+            } else {
+                DEBUG_PRINT("Error: wifi_status_label is invalid in onWiFiScanComplete");
+            }
+
+
+            if (!results.empty()) {
+                for (const auto& net : results) {
+                    if (net.ssid.isEmpty()) continue; // Skip empty SSIDs
+
+                    String displayText = net.ssid;
+                    if (net.encryptionType != WIFI_AUTH_OPEN) {
+                        displayText += " *"; // Indicate secured network
+                    }
+
+                    // Add button to the list
+                    lv_obj_t* btn = lv_list_add_btn(wifi_list, LV_SYMBOL_WIFI, displayText.c_str());
+                        if (!btn) {
+                            DEBUG_PRINTF("Error: Failed to add button for SSID: %s\n", displayText.c_str());
+                            continue; // Skip if button creation failed
+                        }
+                    lv_obj_add_style(btn, &style_btn, 0); // Apply style
+
+                    // Store SSID in button's user data (needs careful memory management if dynamic)
+                    // For simplicity, let's assume we handle selection differently or use indices if possible
+                    // A safer approach is needed if SSIDs are long or numerous.
+                    // For now, let's use the existing callback logic, but be aware of potential issues.
+                    // Add click event with fix to defer UI update
+                    lv_obj_add_event_cb(btn, [](lv_event_t* e) {
+                        lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e);
+                                if (!target_btn || !wifi_list || !lv_obj_is_valid(target_btn) || !lv_obj_is_valid(wifi_list)) return;
+
+                        const char* text = lv_list_get_btn_text(wifi_list, target_btn); // Use target_btn here
+                        if (!text) return;
+
+                        String ssid = String(text);
+                        int idx = ssid.indexOf(" *");
+                        if (idx != -1) ssid = ssid.substring(0, idx); // Remove the indicator
+
+                        // Ensure selected_ssid buffer is large enough and null-terminate
+                        strncpy(selected_ssid, ssid.c_str(), sizeof(selected_ssid) - 1);
+                        selected_ssid[sizeof(selected_ssid) - 1] = '\0';
+                        DEBUG_PRINTF("SSID Selected: %s\n", selected_ssid);
+
+                        // Delay UI updates to avoid rendering conflicts
+                        lv_timer_create([](lv_timer_t* timer) {
+                            showWiFiKeyboard(); // Show keyboard to enter password
+                            lv_timer_del(timer); // Delete the timer after execution
+                        }, 10, NULL); // 10ms delay
+                    }, LV_EVENT_CLICKED, NULL);
+                }
+            }
+            // Update status label again after potentially adding buttons
+            if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
+                 lv_label_set_text(wifi_status_label, results.empty() ? "No networks found" : "Scan complete");
+            }
         }
-    lv_label_set_text(wifi_status_label, "Scan complete");
+        xSemaphoreGive(xGuiSemaphore); // Release semaphore
+    } else {
+        DEBUG_PRINT("Failed to take xGuiSemaphore in onWiFiScanComplete");
     }
 }
 
