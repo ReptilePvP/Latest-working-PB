@@ -42,84 +42,119 @@ void WiFiManager::update() {
 
     // Handle scanning state
     if (_state == WiFiState::WIFI_SCANNING) {
-        int8_t scanResult = WiFi.scanComplete();
-        if (scanResult > 0) {
-            // Scan completed successfully
-            _scanResults.clear();
-            for (int i = 0; i < scanResult; i++) {
-                NetworkInfo network;
-                network.ssid = WiFi.SSID(i);
-                network.rssi = WiFi.RSSI(i);
-                network.encryptionType = WiFi.encryptionType(i);
-                network.saved = findNetwork(network.ssid, _savedNetworks) >= 0;
-                network.connected = (network.ssid == WiFi.SSID());
-                _scanResults.push_back(network);
+        int8_t scanResult = WiFi.scanComplete(); // Check scan status
+
+        // Check if scan finished (successfully or with 0 results)
+        if (scanResult >= 0) {
+            _scanResults.clear(); // Clear previous results regardless
+
+            // If networks were found, process them
+            if (scanResult > 0) {
+                for (int i = 0; i < scanResult; i++) {
+                    NetworkInfo network;
+                    network.ssid = WiFi.SSID(i);
+                    network.rssi = WiFi.RSSI(i);
+                    network.encryptionType = WiFi.encryptionType(i);
+                    network.saved = (findNetwork(network.ssid, _savedNetworks) >= 0);
+                    // Check if this network is the one we are currently connected to
+                    network.connected = isConnected() && (network.ssid == WiFi.SSID());
+                    _scanResults.push_back(network);
+                }
+                // Sort by signal strength (strongest first)
+                std::sort(_scanResults.begin(), _scanResults.end(),
+                    [](const NetworkInfo& a, const NetworkInfo& b) {
+                        return a.rssi > b.rssi;
+                    });
             }
-            
-            // Sort by RSSI
-            std::sort(_scanResults.begin(), _scanResults.end(), 
-                [](const NetworkInfo& a, const NetworkInfo& b) {
-                    return a.rssi > b.rssi;
-                });
-            
-            if (_scanCallback) _scanCallback(_scanResults);
+
+            // Scan is no longer in progress
             _scanInProgress = false;
+            // Update state based on current connection status
             _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
-            notifyStatus("Scan complete");
+            // Notify about scan completion
+            notifyStatus(scanResult > 0 ? "Scan complete" : "Scan complete (0 networks found)");
+            // Trigger the callback with the results (potentially empty)
+            if (_scanCallback) {
+                 _scanCallback(_scanResults);
+            }
+            // IMPORTANT: Free scan results memory
             WiFi.scanDelete();
-        } 
-        else if (scanResult == WIFI_SCAN_FAILED || millis() - _scanStartTime > SCAN_TIMEOUT) {
-            // Scan failed or timed out
-            _scanInProgress = false;
-            _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
-            notifyStatus("Scan failed");
-            if (_scanCallback) _scanCallback(std::vector<NetworkInfo>());
         }
+        // Check if scan failed OR if it's still running but has timed out
+        else if (scanResult == WIFI_SCAN_FAILED || (scanResult == WIFI_SCAN_RUNNING && millis() - _scanStartTime > SCAN_TIMEOUT)) {
+            // Scan is no longer in progress
+            _scanInProgress = false;
+            // Update state based on current connection status
+            _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
+            // Notify about scan failure or timeout
+            notifyStatus(scanResult == WIFI_SCAN_FAILED ? "Scan failed" : "Scan timed out");
+            // Trigger the callback with an empty vector to signal failure/timeout
+            if (_scanCallback) {
+                 _scanCallback(std::vector<NetworkInfo>());
+            }
+             // IMPORTANT: Free scan results memory even on failure/timeout
+            WiFi.scanDelete();
+        }
+        // If scanResult == WIFI_SCAN_RUNNING and not timed out, do nothing and wait for the next update() call
     }
-    
+
     // Handle connecting state
     else if (_state == WiFiState::WIFI_CONNECTING) {
         if (WiFi.status() == WL_CONNECTED) {
             _state = WiFiState::WIFI_CONNECTED;
-            _connectionAttempts = 0;
-            
-            // Update connected status in saved networks
+            _connectionAttempts = 0; // Reset attempts on success
+
+            // Mark the network as connected in our saved list
             int networkIndex = findNetwork(_connectingSSID, _savedNetworks);
             if (networkIndex >= 0) {
+                // Reset all others first
+                for(auto& net : _savedNetworks) { net.connected = false; }
                 _savedNetworks[networkIndex].connected = true;
             }
-            
+
             notifyStatus("Connected to " + WiFi.SSID());
         }
-        else if (WiFi.status() == WL_CONNECT_FAILED || 
+        // Check for various failure conditions or timeout
+        else if (WiFi.status() == WL_CONNECT_FAILED ||
                  WiFi.status() == WL_NO_SSID_AVAIL ||
+                 WiFi.status() == WL_IDLE_STATUS || // Can sometimes indicate failure too
                  millis() - _lastConnectionAttempt > CONNECTION_TIMEOUT) {
-            
+
             _connectionAttempts++;
             if (_connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
                 _state = WiFiState::WIFI_CONNECTION_FAILED;
                 notifyStatus("Connection failed to " + _connectingSSID);
-                // Could try next network here
+                 // Optionally: Try the next saved network automatically here
+                 // connectToBestNetwork(); // Be careful of potential loops
             } else {
                 // Retry connection
-                _lastConnectionAttempt = millis();
+                notifyStatus("Retrying connection to " + _connectingSSID + " (" + String(_connectionAttempts) + ")");
+                _lastConnectionAttempt = millis(); // Update attempt time before retrying
                 WiFi.begin(_connectingSSID.c_str(), _connectingPassword.c_str());
             }
         }
     }
-    
-    // Handle connected state
+
+    // Handle connected state - check if connection dropped
     else if (_state == WiFiState::WIFI_CONNECTED && WiFi.status() != WL_CONNECTED) {
         _state = WiFiState::WIFI_DISCONNECTED;
         notifyStatus("Connection lost");
-        _lastConnectionAttempt = millis();
+         // Mark the network as disconnected in our saved list
+        int networkIndex = findNetwork(_connectingSSID, _savedNetworks); // Use last connected SSID
+        if (networkIndex >= 0) {
+            _savedNetworks[networkIndex].connected = false;
+        }
+        _connectingSSID = ""; // Clear the SSID we thought we were connected to
+        _lastConnectionAttempt = millis(); // Start the timer for reconnection attempts
     }
-    
-    // Handle disconnected state
-    else if ((_state == WiFiState::WIFI_DISCONNECTED || _state == WiFiState::WIFI_CONNECTION_FAILED) && 
-             !_manualDisconnect && 
+
+    // Handle disconnected/failed state - attempt auto-reconnect if not manually disconnected
+    else if ((_state == WiFiState::WIFI_DISCONNECTED || _state == WiFiState::WIFI_CONNECTION_FAILED) &&
+             !_manualDisconnect &&
              millis() - _lastConnectionAttempt > RECONNECT_INTERVAL) {
-        connectToBestNetwork();
+        notifyStatus("Attempting auto-reconnect...");
+        connectToBestNetwork(); // Try connecting to the highest priority network
+        _lastConnectionAttempt = millis(); // Reset timer after attempting reconnect
     }
 }
 

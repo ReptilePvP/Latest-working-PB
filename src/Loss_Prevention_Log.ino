@@ -184,7 +184,10 @@ const char DEFAULT_PASS[] = "justice69";
 
 // WiFi network management
 #define MAX_NETWORKS 5
-
+struct WiFiScanUpdateData {
+    std::vector<NetworkInfo> results;
+    bool scan_failed; // Flag to indicate if the scan itself failed or timed out
+};
 struct WifiNetwork {
     char ssid[33];
     char password[65];
@@ -294,25 +297,21 @@ lv_obj_t *wifi_list = nullptr;
 lv_obj_t *wifi_status_label = nullptr;
 lv_obj_t *saved_networks_list = nullptr;
 
-    // WiFi UI components
-    static lv_obj_t* wifi_keyboard = nullptr;
+// WiFi UI components
+static lv_obj_t* wifi_keyboard = nullptr;
 
     // WiFi icon states
-    struct WiFiIconState {
+struct WiFiIconState {
         bool connected;
         int strength;
         uint32_t color;
     };
 
-    static WiFiIconState currentWiFiState = {
+static WiFiIconState currentWiFiState = {
         .connected = false,
         .strength = 0,
         .color = 0xFF0000
     };
-
-    // GUI Semaphore for thread-safe LVGL updates
-    // static SemaphoreHandle_t xGuiSemaphore = nullptr; // <<< REMOVED: Use extern from m5gfx_lvgl.hpp
-
 
 // Battery monitoring
 static int lastBatteryLevel = -1;
@@ -1259,7 +1258,109 @@ void loop() {
     delay(5); // Small delay for stability
 }
 
+// Static callback to update the WiFi Scan screen UI from LVGL context
+static void wifi_scan_results_update_cb(lv_timer_t* timer) {
+    // Correctly get user data using the API function
+    WiFiScanUpdateData* data = (WiFiScanUpdateData*)lv_timer_get_user_data(timer);
 
+    if (!data) {
+        DEBUG_PRINT("Error: Invalid data pointer in wifi_scan_results_update_cb");
+        lv_timer_del(timer);
+        return;
+    }
+
+    // Take semaphore for safe UI access
+    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)50) == pdTRUE) { // Use a reasonable timeout
+
+        // Only update if the WiFi screen is still active
+        if (wifi_screen && lv_obj_is_valid(wifi_screen) && lv_scr_act() == wifi_screen) {
+            DEBUG_PRINTF("wifi_scan_results_update_cb: Updating UI. Scan failed=%d, Results=%d\n", data->scan_failed, data->results.size());
+
+            // --- UI Updates ---
+            // Remove spinner (should already be gone, but good practice)
+             if (g_spinner != nullptr && lv_obj_is_valid(g_spinner)) {
+                 lv_obj_del(g_spinner);
+                 g_spinner = nullptr;
+             }
+
+            // Clear the list
+            if (wifi_list && lv_obj_is_valid(wifi_list)) {
+                lv_obj_clean(wifi_list);
+            } else {
+                DEBUG_PRINT("Error: wifi_list invalid in wifi_scan_results_update_cb");
+                 // Don't proceed with list updates if list is bad
+                 data->results.clear(); // Prevent processing results below
+            }
+
+            // Update status label
+            if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
+                if (data->scan_failed) {
+                    lv_label_set_text(wifi_status_label, "Scan Failed/Timed Out");
+                } else if (data->results.empty()) {
+                    lv_label_set_text(wifi_status_label, "No networks found");
+                } else {
+                    lv_label_set_text(wifi_status_label, "Select a network");
+                }
+            } else {
+                 DEBUG_PRINT("Error: wifi_status_label invalid in wifi_scan_results_update_cb");
+            }
+
+            // Populate list if scan succeeded and results exist
+            if (!data->scan_failed && !data->results.empty() && wifi_list && lv_obj_is_valid(wifi_list)) {
+                 for (const auto& net : data->results) {
+                     if (net.ssid.isEmpty()) continue;
+
+                     String displayText = net.ssid;
+                     if (net.encryptionType != WIFI_AUTH_OPEN) {
+                         displayText += " *";
+                     }
+
+                     lv_obj_t* btn = lv_list_add_btn(wifi_list, LV_SYMBOL_WIFI, displayText.c_str());
+                     if (btn) {
+                         lv_obj_add_style(btn, &style_btn, 0);
+                         // Add the event callback for button clicks (this runs in LVGL context, so it's safe)
+                         lv_obj_add_event_cb(btn, [](lv_event_t* e) {
+                            lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e);
+                             if (!target_btn || !wifi_list || !lv_obj_is_valid(target_btn) || !lv_obj_is_valid(wifi_list)) return;
+
+                             const char* text = lv_list_get_btn_text(wifi_list, target_btn);
+                             if (!text) return;
+
+                             String ssid = String(text);
+                             int idx = ssid.indexOf(" *");
+                             if (idx != -1) ssid = ssid.substring(0, idx);
+
+                             strncpy(selected_ssid, ssid.c_str(), sizeof(selected_ssid) - 1);
+                             selected_ssid[sizeof(selected_ssid) - 1] = '\0';
+                             DEBUG_PRINTF("SSID Selected via list: %s\n", selected_ssid);
+
+                             // Schedule keyboard display (still good practice)
+                             lv_timer_create([](lv_timer_t* t) { showWiFiKeyboard(); lv_timer_del(t); }, 10, NULL);
+                         }, LV_EVENT_CLICKED, NULL);
+                     } else {
+                          DEBUG_PRINTF("Error: Failed to add list button for %s\n", displayText.c_str());
+                     }
+                 }
+                 // Update status label after adding buttons
+                  if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
+                       lv_label_set_text(wifi_status_label, "Scan complete");
+                  }
+            }
+            // --- End UI Updates ---
+
+        } else {
+             DEBUG_PRINT("wifi_scan_results_update_cb: Screen not active, skipping UI update.");
+        }
+
+        xSemaphoreGive(xGuiSemaphore); // Release semaphore
+    } else {
+        DEBUG_PRINT("Failed to take xGuiSemaphore in wifi_scan_results_update_cb");
+    }
+
+    // Clean up the data structure passed via the timer
+    delete data;
+    lv_timer_del(timer); // Delete the timer itself
+}
 // Swipe left function
 void handleSwipeLeft() {
     lv_obj_t* current_screen = lv_scr_act();
@@ -2831,7 +2932,7 @@ void createWiFiScreen() {
 
     wifi_status_label = lv_label_create(container);
     lv_obj_align(wifi_status_label, LV_ALIGN_TOP_MID, 0, 5);
-    lv_label_set_text(wifi_status_label, "Scanning...");
+    lv_label_set_text(wifi_status_label, "Click to start scanning");
     lv_obj_set_style_text_font(wifi_status_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(wifi_status_label, lv_color_hex(0xFFFFFF), 0);
 
@@ -3360,14 +3461,13 @@ void sendWebhook(const String& entry) {
     http.end();
 }
 
-// Callback for status updates
 // Define a static callback function for the LVGL timer
 static void wifi_status_update_cb(lv_timer_t* timer) {
     // Retrieve the state passed as user data
     WiFiState state = (WiFiState)(uintptr_t)lv_timer_get_user_data(timer);
 
     // Safely take the semaphore for UI updates
-    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
+    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)50) == pdTRUE) {
         // Update status bar if visible (uses global variables)
         if (status_bar && lv_obj_is_valid(status_bar)) {
             // Check if current_status_msg is valid before using it
@@ -3466,94 +3566,51 @@ void onWiFiStatus(WiFiState state, const String& message) {
     // Pass the 'state' variable as user data, casting it to void*
     lv_timer_create(wifi_status_update_cb, 10, (void*)(uintptr_t)state);
 }
+
 // Callback for scan results
+// Callback for scan results (Now only packages data and schedules UI update)
 void onWiFiScanComplete(const std::vector<NetworkInfo>& results) {
-    // Safely take semaphore if accessing shared UI elements like wifi_list
-    if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
-        if (wifi_screen && lv_obj_is_valid(wifi_screen) && lv_scr_act() == wifi_screen) { // Check if screen is active
-            // Remove spinner if it exists
-            if (g_spinner != nullptr && lv_obj_is_valid(g_spinner)) {
-                lv_obj_del(g_spinner);
-                g_spinner = nullptr;
-            }
+    DEBUG_PRINTF("onWiFiScanComplete received %d results (from WiFiManager).\n", results.size());
 
-            // Clear the list before adding new items
-            if (wifi_list && lv_obj_is_valid(wifi_list)) {
-                lv_obj_clean(wifi_list);
-            } else {
-                // If wifi_list is somehow invalid, maybe recreate it or log error
-                DEBUG_PRINT("Error: wifi_list is invalid in onWiFiScanComplete");
-                xSemaphoreGive(xGuiSemaphore);
-                return; // Exit if list is invalid
-            }
+    // Determine if the scan failed based on WiFiManager state
+    // Note: This assumes WiFiManager correctly sets its state *before* calling this callback.
+    bool scan_actually_failed = (wifiManager.getState() == WiFiState::WIFI_CONNECTION_FAILED || // Or however failure is marked
+                                 wifiManager.getStateString().indexOf("failed") != -1 ||
+                                 wifiManager.getStateString().indexOf("timed out") != -1);
 
-            // Update the status label
-            if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
-                if (results.empty()) {
-                    lv_label_set_text(wifi_status_label, "No networks found");
-                } else {
-                    lv_label_set_text(wifi_status_label, "Select a network");
-                }
-            } else {
-                DEBUG_PRINT("Error: wifi_status_label is invalid in onWiFiScanComplete");
-            }
+     if (scan_actually_failed && results.empty()) {
+         DEBUG_PRINT("Scan reported failure/timeout by WiFiManager.");
+     } else if (results.empty()) {
+         DEBUG_PRINT("Scan completed successfully but found 0 networks.");
+     }
 
 
-            if (!results.empty()) {
-                for (const auto& net : results) {
-                    if (net.ssid.isEmpty()) continue; // Skip empty SSIDs
+    // Allocate memory for the data structure ON THE HEAP
+    WiFiScanUpdateData* data_to_pass = new WiFiScanUpdateData;
 
-                    String displayText = net.ssid;
-                    if (net.encryptionType != WIFI_AUTH_OPEN) {
-                        displayText += " *"; // Indicate secured network
-                    }
-
-                    // Add button to the list
-                    lv_obj_t* btn = lv_list_add_btn(wifi_list, LV_SYMBOL_WIFI, displayText.c_str());
-                        if (!btn) {
-                            DEBUG_PRINTF("Error: Failed to add button for SSID: %s\n", displayText.c_str());
-                            continue; // Skip if button creation failed
-                        }
-                    lv_obj_add_style(btn, &style_btn, 0); // Apply style
-
-                    // Store SSID in button's user data (needs careful memory management if dynamic)
-                    // For simplicity, let's assume we handle selection differently or use indices if possible
-                    // A safer approach is needed if SSIDs are long or numerous.
-                    // For now, let's use the existing callback logic, but be aware of potential issues.
-                    // Add click event with fix to defer UI update
-                    lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-                        lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e);
-                                if (!target_btn || !wifi_list || !lv_obj_is_valid(target_btn) || !lv_obj_is_valid(wifi_list)) return;
-
-                        const char* text = lv_list_get_btn_text(wifi_list, target_btn); // Use target_btn here
-                        if (!text) return;
-
-                        String ssid = String(text);
-                        int idx = ssid.indexOf(" *");
-                        if (idx != -1) ssid = ssid.substring(0, idx); // Remove the indicator
-
-                        // Ensure selected_ssid buffer is large enough and null-terminate
-                        strncpy(selected_ssid, ssid.c_str(), sizeof(selected_ssid) - 1);
-                        selected_ssid[sizeof(selected_ssid) - 1] = '\0';
-                        DEBUG_PRINTF("SSID Selected: %s\n", selected_ssid);
-
-                        // Delay UI updates to avoid rendering conflicts
-                        lv_timer_create([](lv_timer_t* timer) {
-                            showWiFiKeyboard(); // Show keyboard to enter password
-                            lv_timer_del(timer); // Delete the timer after execution
-                        }, 10, NULL); // 10ms delay
-                    }, LV_EVENT_CLICKED, NULL);
-                }
-            }
-            // Update status label again after potentially adding buttons
-            if (wifi_status_label && lv_obj_is_valid(wifi_status_label)) {
-                 lv_label_set_text(wifi_status_label, results.empty() ? "No networks found" : "Scan complete");
-            }
+    if (!data_to_pass) {
+        DEBUG_PRINT("Error: Failed to allocate memory for WiFiScanUpdateData!");
+        // Attempt to clean up spinner directly if memory allocation fails, as timer won't run
+        if (xSemaphoreTake(xGuiSemaphore, (TickType_t)10) == pdTRUE) {
+             if (g_spinner != nullptr && lv_obj_is_valid(g_spinner)) {
+                 lv_obj_del(g_spinner);
+                 g_spinner = nullptr;
+             }
+             xSemaphoreGive(xGuiSemaphore);
         }
-        xSemaphoreGive(xGuiSemaphore); // Release semaphore
-    } else {
-        DEBUG_PRINT("Failed to take xGuiSemaphore in onWiFiScanComplete");
+        return; // Cannot proceed
     }
+
+    // Copy the results into the data structure
+    data_to_pass->results = results; // std::vector copy assignment
+    data_to_pass->scan_failed = scan_actually_failed;
+
+    // Create a one-shot LVGL timer to execute the UI update callback
+    // Pass the pointer to the heap-allocated data structure
+    lv_timer_create(wifi_scan_results_update_cb, 5, data_to_pass); // 5ms delay
+    DEBUG_PRINT("Scheduled wifi_scan_results_update_cb timer.");
+
+    // DO NOT touch UI elements here (like g_spinner, wifi_list, wifi_status_label)
 }
 
 void createSettingsScreen() {
