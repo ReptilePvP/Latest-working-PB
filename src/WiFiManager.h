@@ -2,223 +2,148 @@
 #define WIFI_MANAGER_H
 
 #include <WiFi.h>
-#include <vector>
 #include <Preferences.h>
+#include <vector>
 #include <functional>
 
-/**
- * Represents the possible states of the WiFi connection
- */
+// Define constants
+#define CONNECTION_TIMEOUT 10000  // 10 seconds for connection timeout
+#define RECONNECT_INTERVAL 30000  // 30 seconds for reconnection attempts
+#define WIFI_COMMAND_QUEUE_SIZE 10
+#define WIFI_RESULT_QUEUE_SIZE 10
+#define WIFI_TASK_STACK_SIZE 4096 // Stack size for WiFi task
+#define WIFI_TASK_PRIORITY 5      // Task priority
+#define MAX_SAVED_NETWORKS 10     // Maximum number of saved networks
+
+// Enum for WiFi states
 enum class WiFiState {
-    WIFI_DISABLED,      // WiFi is turned off
-    WIFI_DISCONNECTED,  // WiFi is on but not connected to any network
-    WIFI_SCANNING,      // Currently performing a network scan
-    WIFI_CONNECTING,    // Attempting to connect to a network
-    WIFI_CONNECTED,     // Successfully connected to a network
-    WIFI_CONNECTION_FAILED  // Connection attempt failed
+    WIFI_DISABLED,          // WiFi is off
+    WIFI_DISCONNECTED,      // WiFi on, not connected
+    WIFI_CONNECTING,        // Attempting to connect
+    WIFI_CONNECTED,         // Successfully connected
+    WIFI_CONNECTION_FAILED, // Connection attempt failed
+    WIFI_SCAN_REQUESTED,    // Scan requested but not yet started
+    WIFI_SCANNING,          // Actively scanning for networks
+    WIFI_CONNECT_REQUESTED  // Connect requested but not yet started
 };
 
-/**
- * Holds information about a WiFi network
- */
+// Enum for command types sent to the task
+enum class WiFiCommandType {
+    CMD_ENABLE,       // Enable WiFi
+    CMD_DISABLE,      // Disable WiFi
+    CMD_START_SCAN,   // Start a network scan
+    CMD_CONNECT,      // Connect to a specific network
+    CMD_DISCONNECT,   // Disconnect from current network
+    CMD_TERMINATE     // Terminate the task
+};
+
+// Enum for result types sent back from the task
+enum class WiFiResultType {
+    RESULT_STATUS_UPDATE, // General state update (e.g., connecting, disconnected)
+    RESULT_SCAN_COMPLETE  // Scan completed with results
+};
+
+// Structure for network information
 struct NetworkInfo {
     String ssid;
-    String password;
-    int8_t rssi;
-    uint8_t encryptionType;
-    bool saved;
-    bool connected;
-    int priority; // Higher value = higher priority
+    String password;        // Only used for saved networks
+    int32_t rssi;           // Signal strength
+    wifi_auth_mode_t encryptionType;
+    bool saved;             // Is this network in saved list?
+    bool connected;         // Are we currently connected to it?
+    int priority = 0;       // Higher number = lower priority (changed from uint8_t to int for consistency)
+};
+
+// Structure for commands sent to the task
+struct WiFiCommand {
+    WiFiCommandType type;
+    String ssid;            // Used for CMD_CONNECT
+    String password;        // Used for CMD_CONNECT
+    bool manualDisconnect;  // Used for CMD_DISCONNECT
+    bool enable;            // Used for CMD_ENABLE/CMD_DISABLE
+    bool save;              // Used for CMD_CONNECT (save to preferences)
+    int priority;           // Used for CMD_CONNECT (priority of network)
+};
+
+// Structure for results sent back from the task
+struct WiFiResult {
+    WiFiResultType type;
+    WiFiState newState;
+    String message;
+    std::vector<NetworkInfo> scanResults; // Used for RESULT_SCAN_COMPLETE
 };
 
 class WiFiManager {
 public:
-    using StatusCallback = std::function<void(WiFiState, const String&)>;
-    using ScanCallback = std::function<void(const std::vector<NetworkInfo>&)>;
-
-    WiFiManager();
+    // Constructor with optional enabled parameter
+    WiFiManager(bool enabled = true);
+    // Destructor
     ~WiFiManager();
 
-    /**
-     * Initialize the WiFi manager
-     * Loads saved networks and attempts to connect if enabled
-     */
-    void begin();
+    // Public methods
+    void begin();                          // Initialize the manager and start the task
+    bool startScan();                      // Request a network scan
+    bool isScanning() const;               // Check if a scan is in progress
+    bool isEnabled() const;                // Check if WiFi is enabled
+    bool isInitialized() const;            // Check if manager is initialized
+    bool isConnected() const;              // Check if connected to a network
+    void setEnabled(bool enabled);         // Enable or disable WiFi
+    WiFiState getState() const;            // Get current WiFi state
+    String getStateString() const;         // Get state as string
+    String getCurrentSSID() const;         // Get current SSID if connected
+    int getRSSI() const;                   // Get signal strength if connected
+    String getIPAddress() const;           // Get IP address if connected
+    bool connect(const String& ssid, const String& password, bool save = false, int priority = 0); // Connect to a network
+    bool connectToBestNetwork();           // Connect to best saved network
+    void disconnect(bool manual = false);  // Disconnect from current network
+    std::vector<NetworkInfo> getScanResults() const; // Get latest scan results
 
-    /**
-     * Update the WiFi state machine
-     * Must be called regularly from the main loop
-     */
-    void update();
-
-    // Configuration Methods
-    /**
-     * Set callback for WiFi status updates
-     * @param cb Callback function receiving state and status message
-     */
+    // Callback setters
+    using StatusCallback = std::function<void(WiFiState, const String&)>;
+    using ScanCallback = std::function<void(const std::vector<NetworkInfo>&)>;
     void setStatusCallback(StatusCallback cb);
-
-    /**
-     * Set callback for WiFi scan results
-     * @param cb Callback function receiving vector of NetworkInfo
-     */
     void setScanCallback(ScanCallback cb);
 
-    /**
-     * Enable or disable WiFi
-     * When disabled, WiFi hardware is turned off
-     * @param enabled true to enable, false to disable
-     */
-    void setEnabled(bool enabled);
+    // Network management
+    bool addNetwork(const String& ssid, const String& password, int priority = 0); // Add a network with priority
+    void addNetwork(const NetworkInfo& network); // Add a network object
+    bool removeNetwork(const String& ssid);      // Remove a network from saved list
+    bool setNetworkPriority(const String& ssid, int priority); // Update network priority
+    std::vector<NetworkInfo> getSavedNetworks() const; // Get list of saved networks
 
-    /**
-     * @return true if WiFi is enabled
-     */
-    bool isEnabled() const;
-
-    /**
-     * @return true if WiFiManager is initialized
-     */
-    bool isInitialized() const;
-
-    // Connection Methods
-    /**
-     * Initiates an asynchronous connection attempt to a WiFi network
-     * @param ssid Network SSID to connect to
-     * @param password Network password
-     * @param save If true, network will be saved for future connections
-     * @param priority Connection priority (higher = more preferred)
-     * @return true if connection attempt was initiated, false if preconditions fail
-     */
-    bool connect(const String& ssid, const String& password, bool save = true, int priority = 0);
-
-    /**
-     * Attempts to connect to the highest priority saved network
-     * Connection result will be reported via status callback
-     * @return true if connection attempt was initiated, false if no networks available
-     */
-    bool connectToBestNetwork();
-
-    /**
-     * Disconnects from the current network
-     * @param manual If true, indicates user-initiated disconnect
-     */
-    void disconnect(bool manual = true);
-
-    /**
-     * @return true if currently connected to a network
-     */
-    bool isConnected() const;
-
-    /**
-     * @return SSID of currently connected network, or empty string if not connected
-     */
-    String getCurrentSSID() const;
-
-    /**
-     * @return Current connection signal strength in dBm, or 0 if not connected
-     */
-    int getRSSI() const;
-
-    /**
-     * @return Current IP address as string, or empty string if not connected
-     */
-    String getIPAddress() const;
-
-    // Scanning Methods
-    /**
-     * Start an asynchronous network scan
-     * @return true if scan was started, false if preconditions fail
-     */
-    bool startScan();
-
-    /**
-     * @return true if a scan is in progress
-     */
-    bool isScanning() const;
-
-    /**
-     * @return vector of NetworkInfo from last scan
-     */
-    std::vector<NetworkInfo> getScanResults() const;
-
-    // Network Management Methods
-    /**
-     * Add or update a network in the saved networks list
-     * @param ssid Network SSID
-     * @param password Network password
-     * @param priority Connection priority (higher = more preferred)
-     * @return true if network was added/updated successfully
-     */
-    bool addNetwork(const String& ssid, const String& password, int priority = 0);
-
-    /**
-     * Remove a network from the saved networks list
-     * @param ssid Network SSID to remove
-     * @return true if network was found and removed
-     */
-    bool removeNetwork(const String& ssid);
-
-    /**
-     * Update the priority of a saved network
-     * @param ssid Network SSID
-     * @param priority New priority value (higher = more preferred)
-     * @return true if network was found and priority was updated
-     */
-    bool setNetworkPriority(const String& ssid, int priority);
-
-    /**
-     * @return Vector of all saved networks, sorted by priority
-     */
-    std::vector<NetworkInfo> getSavedNetworks() const;
-
-    /**
-     * Save current network list to persistent storage
-     */
-    void saveNetworks();
-
-    /**
-     * Load saved networks from persistent storage
-     */
-    void loadSavedNetworks();
-
-    // State Methods
-    /**
-     * @return Current WiFi state
-     */
-    WiFiState getState() const;
-
-    /**
-     * @return Human-readable string representing current WiFi state
-     */
-    String getStateString() const;
+    // Main update function to process task results
+    void update();
 
 private:
-    WiFiState _state;
-    bool _enabled;
-    bool _manualDisconnect;
-    bool _initialized;
-    bool _scanInProgress;
-    unsigned long _lastConnectionAttempt;
-    unsigned long _scanStartTime;
-    int _connectionAttempts;
-    String _connectingSSID;
-    String _connectingPassword;
-    std::vector<NetworkInfo> _savedNetworks;
-    std::vector<NetworkInfo> _scanResults;
-    Preferences _preferences;
-    StatusCallback _statusCallback;
-    ScanCallback _scanCallback;
+    // Private members
+    WiFiState _state;              // Current WiFi state
+    bool _enabled;                 // Is WiFi enabled?
+    bool _manualDisconnect;        // Was disconnection manual?
+    bool _initialized;             // Has begin() been called successfully?
+    bool _scanInProgress;          // Is a scan currently in progress?
+    unsigned long _lastConnectionAttempt; // Last connection attempt time
+    unsigned long _scanStartTime;  // Time when last scan started
+    int _connectionAttempts;       // Number of connection attempts
+    unsigned long _lastReconnectAttempt; // Last reconnect attempt time
+    String _connectingSSID;        // SSID currently being connected to
+    TaskHandle_t _wifiTaskHandle;  // Handle for the WiFi task
+    QueueHandle_t _commandQueue;   // Queue for sending commands to task
+    QueueHandle_t _resultQueue;    // Queue for receiving results from task
+    Preferences _preferences;      // Storage for saved networks
+    std::vector<NetworkInfo> _savedNetworks; // List of saved networks
+    std::vector<NetworkInfo> _scanResults;   // Latest scan results
+    StatusCallback _statusCallback; // Callback for status updates
+    ScanCallback _scanCallback;     // Callback for scan results
 
-    static const unsigned long CONNECTION_TIMEOUT = 10000; // 10s
-    static const unsigned long SCAN_TIMEOUT = 8000;       // 8s
-    static const unsigned long RECONNECT_INTERVAL = 30000; // 30s between retries
-    static const int MAX_CONNECTION_ATTEMPTS = 3;
-    static const int MAX_SAVED_NETWORKS = 5;
+    // Private helper methods
+    void loadSavedNetworks();      // Load saved networks from Preferences
+    void saveNetworks();           // Save networks to Preferences
+    void notifyStatus(const String& message); // Notify status via callback
+    int findNetwork(const String& ssid, const std::vector<NetworkInfo>& networks) const; // Find network index
+    void sortNetworksByPriority(std::vector<NetworkInfo>& networks); // Sort networks by priority
 
-    void updateState();
-    void notifyStatus(const String& message);
-    void sortNetworksByPriority(std::vector<NetworkInfo>& networks);
-    int findNetwork(const String& ssid, const std::vector<NetworkInfo>& networks) const;
+    // Static task function
+    static void wifiTaskLoop(void* parameter);
 };
-#endif
+
+#endif // WIFI_MANAGER_H
