@@ -517,7 +517,7 @@ void WiFiManager::wifiTaskLoop(void* parameter) {
     }
 
     while (true) {
-        ESP_LOGD(TAG, "Task loop iteration");
+        // ESP_LOGD(TAG, "Task loop iteration"); // Commented out noisy log
 
         WiFiState currentState = WiFi.status() == WL_CONNECTED ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
         if (!taskEnabled) currentState = WiFiState::WIFI_DISABLED;
@@ -579,13 +579,14 @@ void WiFiManager::wifiTaskLoop(void* parameter) {
                         }
 
                         unsigned long scanStart = millis();
+                        ESP_LOGI(TAG, "Task: Calling WiFi.scanNetworks(false, false)... @ %lu ms", scanStart);
                         int scanResultCount = WiFi.scanNetworks(false, false);
                         unsigned long scanEnd = millis();
-                        ESP_LOGI(TAG, "Task: Scan finished in %lu ms, found %d networks", 
-                                 scanEnd - scanStart, scanResultCount);
+                        ESP_LOGI(TAG, "Task: Scan finished in %lu ms, result code: %d @ %lu ms", scanEnd - scanStart, scanResultCount, scanEnd);
 
                         result.scanResults.clear();
                         if (scanResultCount > 0) {
+                            ESP_LOGI(TAG, "Task: Processing %d found networks...", scanResultCount);
                             for (int i = 0; i < scanResultCount; i++) {
                                 NetworkInfo network;
                                 network.ssid = WiFi.SSID(i);
@@ -608,6 +609,7 @@ void WiFiManager::wifiTaskLoop(void* parameter) {
                         result.type = WiFiResultType::RESULT_SCAN_COMPLETE;
                         result.newState = (WiFi.status() == WL_CONNECTED) ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
                         result.message = (scanResultCount >= 0) ? "Scan complete" : "Scan failed";
+                        ESP_LOGI(TAG, "Task: Sending SCAN_COMPLETE result. State: %d, Msg: %s", (int)result.newState, result.message.c_str());
                         if (xQueueSend(instance->_resultQueue, &result, 0) != pdPASS) {
                             ESP_LOGE(TAG, "Task: Failed to send SCAN_COMPLETE to result queue");
                         } else {
@@ -663,6 +665,7 @@ void WiFiManager::wifiTaskLoop(void* parameter) {
                 if (WiFi.status() == WL_CONNECTED) {
                     ESP_LOGI(TAG, "Task: Connection successful to %s", WiFi.SSID().c_str());
                     reportedState = WiFiState::WIFI_CONNECTED;
+                    instance->_state = reportedState; // Update state immediately
                     reportedMessage = "Connected to " + WiFi.SSID();
                     shouldReport = true;
                     currentConnectingSSID = "";

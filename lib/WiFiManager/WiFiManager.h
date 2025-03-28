@@ -1,19 +1,32 @@
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 
+#include <Arduino.h> // Core Arduino functions (String, millis, etc.)
 #include <WiFi.h>
 #include <Preferences.h>
 #include <vector>
 #include <functional>
+#include <algorithm> // For std::sort, std::min
+#include <cstdint>   // For int8_t
+#include <cstddef>   // For NULL/nullptr (though nullptr is preferred)
+#include "freertos/FreeRTOS.h" // Core FreeRTOS
+#include "freertos/task.h"     // Task functions (vTaskDelay, vTaskDelete, TaskHandle_t)
+#include "freertos/queue.h"    // Queue functions (xQueueCreate, xQueueSend, xQueueReceive, QueueHandle_t)
+#include "esp_log.h"     // ESP logging framework (ESP_LOGI, ESP_LOGW, etc.)
 
 // Define constants
 #define CONNECTION_TIMEOUT 10000  // 10 seconds for connection timeout
 #define RECONNECT_INTERVAL 30000  // 30 seconds for reconnection attempts
 #define WIFI_COMMAND_QUEUE_SIZE 10
 #define WIFI_RESULT_QUEUE_SIZE 10
-#define WIFI_TASK_STACK_SIZE 4096 // Stack size for WiFi task
+#define WIFI_TASK_STACK_SIZE 8192 // Increased from 4096
 #define WIFI_TASK_PRIORITY 5      // Task priority
 #define MAX_SAVED_NETWORKS 10     // Maximum number of saved networks
+#define WIFI_CONNECT_TIMEOUT_MS 15000 // Connection attempt timeout
+#define WIFI_MAX_CONNECT_ATTEMPTS 3   // Max connection retries
+#define WIFI_SCAN_TIMEOUT_MS 20000    // Scan timeout
+#define WIFI_TASK_DELAY_MS 100      // Delay in the WiFi task loop
+#define WIFI_RECONNECT_INTERVAL_MS 30000 // Interval between auto-reconnect attempts
 
 // Enum for WiFi states
 enum class WiFiState {
@@ -141,6 +154,7 @@ private:
     void notifyStatus(const String& message); // Notify status via callback
     int findNetwork(const String& ssid, const std::vector<NetworkInfo>& networks) const; // Find network index
     void sortNetworksByPriority(std::vector<NetworkInfo>& networks); // Sort networks by priority
+    String getPasswordForSSID(const String& ssid); // Helper function to get password for a given SSID
 
     // Static task function
     static void wifiTaskLoop(void* parameter);
