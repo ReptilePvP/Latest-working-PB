@@ -97,36 +97,47 @@ void WiFiManager::update() {
 }
 
 void WiFiManager::updateState() {
-    switch (_state) {
-        case WiFiState::WIFI_SCANNING: {
-            int scanStatus = WiFi.scanComplete();
-            if (scanStatus >= 0) {
-                _scanResults.clear();
-                for (int i = 0; i < scanStatus; i++) {
-                    NetworkInfo info;
-                    info.ssid = WiFi.SSID(i);
-                    info.rssi = WiFi.RSSI(i);
-                    info.encryptionType = WiFi.encryptionType(i);
-                    info.saved = findNetwork(info.ssid, _savedNetworks) >= 0;
-                    info.connected = (WiFi.status() == WL_CONNECTED && WiFi.SSID() == info.ssid);
-                    info.priority = info.saved ? _savedNetworks[findNetwork(info.ssid, _savedNetworks)].priority : 0;
-                    _scanResults.push_back(info);
-                }
-                sortNetworksByPriority(_scanResults);
-                _scanInProgress = false;
-                _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
-                notifyStatus("Scan complete: " + String(_scanResults.size()) + " networks found");
-                if (_scanCallback) _scanCallback(_scanResults);
-            } else if (millis() - _scanStartTime > SCAN_TIMEOUT) {
-                WiFi.scanDelete();
-                _scanInProgress = false;
-                _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
-                notifyStatus("Scan timed out");
+    // First handle scan completion regardless of current state
+    if (_scanInProgress) {
+        int scanStatus = WiFi.scanComplete();
+        if (scanStatus >= 0) {
+            _scanResults.clear();
+            for (int i = 0; i < scanStatus; i++) {
+                NetworkInfo info;
+                info.ssid = WiFi.SSID(i);
+                info.rssi = WiFi.RSSI(i);
+                info.encryptionType = WiFi.encryptionType(i);
+                info.saved = findNetwork(info.ssid, _savedNetworks) >= 0;
+                info.connected = (WiFi.status() == WL_CONNECTED && WiFi.SSID() == info.ssid);
+                info.priority = info.saved ? _savedNetworks[findNetwork(info.ssid, _savedNetworks)].priority : 0;
+                _scanResults.push_back(info);
             }
-            break;
+            sortNetworksByPriority(_scanResults);
+            _scanInProgress = false;
+            notifyStatus("Scan complete: " + String(_scanResults.size()) + " networks found");
+            if (_scanCallback) _scanCallback(_scanResults);
+        } else if (millis() - _scanStartTime > SCAN_TIMEOUT) {
+            WiFi.scanDelete();
+            _scanInProgress = false;
+            _state = isConnected() ? WiFiState::WIFI_CONNECTED : WiFiState::WIFI_DISCONNECTED;
+            notifyStatus("Scan timed out");
         }
+    }
+
+    switch (_state) {
+        case WiFiState::WIFI_SCANNING:
+            // State handling moved to the scan check above
+            break;
+
         case WiFiState::WIFI_CONNECTING: {
-            if (WiFi.status() == WL_CONNECTED) {
+            if (_manualDisconnect) {
+                _state = WiFiState::WIFI_DISCONNECTED;
+                notifyStatus("Manual disconnect received while connecting");
+                break;
+            }
+            
+            wl_status_t status = WiFi.status();
+            if (status == WL_CONNECTED) {
                 _state = WiFiState::WIFI_CONNECTED;
                 _connectionAttempts = 0;
                 notifyStatus("Connected to " + _connectingSSID);
@@ -134,28 +145,41 @@ void WiFiManager::updateState() {
                 if (_connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
                     _lastConnectionAttempt = millis();
                     _connectionAttempts++;
+                    WiFi.disconnect();
+                    delay(100); // Brief delay to ensure clean disconnect
                     WiFi.begin(_connectingSSID.c_str(), _connectingPassword.c_str());
                     notifyStatus("Retrying connection (" + String(_connectionAttempts) + "/" + String(MAX_CONNECTION_ATTEMPTS) + ")");
                 } else {
                     _state = WiFiState::WIFI_DISCONNECTED;
+                    _lastConnectionAttempt = millis(); // Prevent immediate reconnect
                     notifyStatus("Connection failed to " + _connectingSSID);
                 }
             }
             break;
         }
         case WiFiState::WIFI_CONNECTED: {
-            if (WiFi.status() != WL_CONNECTED) {
+            wl_status_t status = WiFi.status();
+            if (status != WL_CONNECTED) {
                 _state = WiFiState::WIFI_DISCONNECTED;
-                if (!_manualDisconnect) connectToBestNetwork();
+                _lastConnectionAttempt = millis(); // Set this to prevent immediate reconnect
+                notifyStatus("Connection lost");
+                // Don't attempt immediate reconnect - wait for next update cycle
             }
             break;
         }
+
         case WiFiState::WIFI_DISCONNECTED: {
-            if (!_manualDisconnect && millis() - _lastConnectionAttempt > RECONNECT_INTERVAL) {
+            if (_manualDisconnect) break;
+            
+            unsigned long now = millis();
+            if (!_scanInProgress && 
+                now - _lastConnectionAttempt > RECONNECT_INTERVAL) {
                 connectToBestNetwork();
             }
             break;
         }
+
+        case WiFiState::WIFI_DISABLED:
         default:
             break;
     }
