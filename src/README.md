@@ -74,7 +74,7 @@ The Loss Prevention Log system is an embedded IoT solution built on the M5Stack 
    - Use the Arduino Library Manager to install:
      - M5Unified
      - M5GFX
-     - LVGL (version 8.4.0)
+     - LVGL (version 9.2.2)
      - ESP32Time
    - Other required libraries (WiFi, Preferences, SPI, SD, HTTPClient, Wire) are included with the ESP32 Arduino Core
 
@@ -124,14 +124,9 @@ The system follows a modular design with the following key components:
    - Saved network management with prioritization
    - Complete state machine design for robust operation
 
-3. **Screen Transitions (`screen_transition.h`)**
-   - Custom implementation for smooth screen transitions
-   - Multiple transition effects (fade, slide, zoom)
-   - Consistent navigation experience
-   - Performance-optimized animations
 
 4. **User Interface**
-   - Built with LVGL 8.4.0
+   - Built with LVGL 9.2.2
    - Card-style UI components for modern look and feel
    - Multiple well-defined screens for different functions
    - Enhanced with custom styles and layouts
