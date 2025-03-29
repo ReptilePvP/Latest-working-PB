@@ -1276,74 +1276,51 @@ void createWiFiScreen() {
     wifi_screen = lv_obj_create(NULL);
     lv_obj_add_style(wifi_screen, &style_screen, 0);
 
+    // Header (non-scrollable)
     lv_obj_t* header = lv_obj_create(wifi_screen);
     lv_obj_set_size(header, SCREEN_WIDTH, 50);
     lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
+    lv_obj_set_scrollbar_mode(header, LV_SCROLLBAR_MODE_OFF); // Disable scrolling
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE); // Make header fixed
+    
+    // Title in header
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, "WiFi Networks");
     lv_obj_add_style(title, &style_title, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
-    // Container with subtle shadow
-    lv_obj_t* container = lv_obj_create(wifi_screen);
-    lv_obj_set_size(container, 300, 180);
-    lv_obj_align(container, LV_ALIGN_TOP_MID, 0, 70);
-    lv_obj_set_style_bg_color(container, lv_color_hex(0x2A2A40), 0);
-    lv_obj_set_style_radius(container, 10, 0);
-    lv_obj_set_style_shadow_color(container, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_shadow_width(container, 15, 0);
-    lv_obj_set_style_pad_all(container, 20, 0);
-
-    wifi_status_label = lv_label_create(container);
-    lv_obj_align(wifi_status_label, LV_ALIGN_TOP_MID, 0, 5);
-    lv_label_set_text(wifi_status_label, "Scanning...");
-    lv_obj_set_style_text_font(wifi_status_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(wifi_status_label, lv_color_hex(0xFFFFFF), 0);
-
-    wifi_list = lv_list_create(container);
-    lv_obj_set_size(wifi_list, 280, 140);
-    lv_obj_align(wifi_list, LV_ALIGN_TOP_MID, 0, 30);
-    lv_obj_set_style_bg_color(wifi_list, lv_color_hex(0x2A2A40), 0);
-    lv_obj_set_style_border_width(wifi_list, 0, 0);
-    lv_obj_set_scroll_dir(wifi_list, LV_DIR_VER);
-    current_scroll_obj = wifi_list;
-
-    // Bottom button container
-    lv_obj_t* btnContainer = lv_obj_create(wifi_screen);
-    lv_obj_set_size(btnContainer, 300, 50);
-    lv_obj_align(btnContainer, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_style_bg_opa(btnContainer, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(btnContainer, 0, 0);
-    lv_obj_set_flex_flow(btnContainer, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(btnContainer, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    lv_obj_t* back_btn = lv_btn_create(btnContainer);
-    lv_obj_set_size(back_btn, 120, 45);
-    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 0, 0);
+    // Back Button (inside header, left side)
+    lv_obj_t* back_btn = lv_btn_create(header);
+    lv_obj_set_size(back_btn, 40, 30); // Smaller size to fit in header
+    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 10, 0); // Aligned to left with padding
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x444444), 0); // Slightly lighter gray
+    lv_obj_set_style_radius(back_btn, 5, 0);
     lv_obj_add_style(back_btn, &style_btn, 0);
     lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "Back");
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT); // Left arrow icon
     lv_obj_center(back_label);
-
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0); // White text
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
         createWiFiManagerScreen();
     }, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t* refresh_btn = lv_btn_create(btnContainer);
-    lv_obj_set_size(refresh_btn, 120, 45);
-    lv_obj_align(refresh_btn, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_style(refresh_btn, &style_btn, 0);
-    lv_obj_add_style(refresh_btn, &style_btn_pressed, LV_STATE_PRESSED);
-    lv_obj_t* refresh_label = lv_label_create(refresh_btn);
-    lv_label_set_text(refresh_label, "Scan");
-    lv_obj_center(refresh_label);
-
-    lv_obj_add_event_cb(refresh_btn, [](lv_event_t* e) {
+    // Scan Button (inside header, right side)
+    lv_obj_t* scan_btn = lv_btn_create(header);
+    lv_obj_set_size(scan_btn, 40, 30); // Smaller size to fit in header
+    lv_obj_align(scan_btn, LV_ALIGN_RIGHT_MID, -10, 0); // Aligned to right with padding
+    lv_obj_set_style_bg_color(scan_btn, lv_color_hex(0x444444), 0); // Slightly lighter gray
+    lv_obj_set_style_radius(scan_btn, 5, 0);
+    lv_obj_add_style(scan_btn, &style_btn, 0);
+    lv_obj_add_style(scan_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* scan_label = lv_label_create(scan_btn);
+    lv_label_set_text(scan_label, LV_SYMBOL_REFRESH); // Search icon
+    lv_obj_center(scan_label);
+    lv_obj_set_style_text_color(scan_label, lv_color_hex(0xFFFFFF), 0); // White text
+    lv_obj_add_event_cb(scan_btn, [](lv_event_t* e) {
         // Clear list and update status
         lv_obj_clean(wifi_list);
         lv_label_set_text(wifi_status_label, "Scanning...");
-        
         
         // Create spinner to indicate scanning
         if (g_spinner == nullptr) {
@@ -1386,6 +1363,39 @@ void createWiFiScreen() {
             }
         }, 1000, &scan_start_time);
     }, LV_EVENT_CLICKED, NULL);
+
+    // Container with subtle shadow
+    lv_obj_t* container = lv_obj_create(wifi_screen);
+    lv_obj_set_size(container, 300, 180);
+    lv_obj_align(container, LV_ALIGN_TOP_MID, 0, 70); // Adjusted to account for fixed header
+    lv_obj_set_style_bg_color(container, lv_color_hex(0x2A2A40), 0);
+    lv_obj_set_style_radius(container, 10, 0);
+    lv_obj_set_style_shadow_color(container, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_shadow_width(container, 15, 0);
+    lv_obj_set_style_pad_all(container, 20, 0);
+
+    wifi_status_label = lv_label_create(container);
+    lv_obj_align(wifi_status_label, LV_ALIGN_TOP_MID, 0, 5);
+    lv_label_set_text(wifi_status_label, "Scanning...");
+    lv_obj_set_style_text_font(wifi_status_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(wifi_status_label, lv_color_hex(0xFFFFFF), 0);
+
+    wifi_list = lv_list_create(container);
+    lv_obj_set_size(wifi_list, 280, 140);
+    lv_obj_align(wifi_list, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_style_bg_color(wifi_list, lv_color_hex(0x2A2A40), 0);
+    lv_obj_set_style_border_width(wifi_list, 0, 0);
+    lv_obj_set_scroll_dir(wifi_list, LV_DIR_VER);
+    current_scroll_obj = wifi_list;
+
+    // Bottom button container (empty)
+    lv_obj_t* btnContainer = lv_obj_create(wifi_screen);
+    lv_obj_set_size(btnContainer, 300, 50);
+    lv_obj_align(btnContainer, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_opa(btnContainer, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(btnContainer, 0, 0);
+    lv_obj_set_flex_flow(btnContainer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btnContainer, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_scr_load(wifi_screen);
 }
@@ -1481,7 +1491,7 @@ void cleanupWiFiResources() {
     }
 }
 
-
+// --------------------------------------------------
 
 void createMainMenu() {
     DEBUG_PRINTF("Free heap before main menu: %d bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
