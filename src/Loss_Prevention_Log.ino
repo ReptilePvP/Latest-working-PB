@@ -35,6 +35,8 @@ static void on_month_change(lv_event_t* e);
 static void on_day_change(lv_event_t* e);
 static void on_hour_change(lv_event_t* e);
 static void on_minute_change(lv_event_t* e);
+static void pants_type_card_event_cb(lv_event_t* e); // <<< ADDED
+static void pants_color_next_btn_event_cb(lv_event_t* e); // <<< ADDED
 
 // Static pointers to remember rollers between callbacks
 static lv_obj_t* g_year_roller = nullptr;
@@ -111,6 +113,8 @@ void createColorMenuPants();
 void createColorMenuShoes();
 void createItemMenu();
 void createApparelTypeMenu(); // <<< ADDED: Forward declaration for new menu
+void createPantsTypeMenu(); // <<< ADDED: Forward declaration for pants type menu
+void createShoeStyleMenu(); // <<< ADDED: Forward declaration for shoe style menu
 void createConfirmScreen();
 void scanNetworks();
 void showWiFiKeyboard();
@@ -159,9 +163,20 @@ const char* apparelTypes[] = {"Hoodie", "Jacket", "Long Sleeve", "Short Sleeve"}
 const int NUM_APPAREL_TYPES = sizeof(apparelTypes) / sizeof(apparelTypes[0]);
 String selectedApparelType = "";
 // >>> ADDED
+// <<< ADDED: New globals for pants type
+const char* pantsTypes[] = {"Jeans", "Shorts", "Sweat Pants", "Leggings", "Skirt"};
+const int NUM_PANTS_TYPES = sizeof(pantsTypes) / sizeof(pantsTypes[0]);
+String selectedPantsType = "";
+// >>> ADDED
 
-// Global variables for network processing (UI related)
-static lv_obj_t* g_spinner = nullptr; // Global spinner object
+// <<< ADDED: New globals for shoe style
+const char* shoeStyles[] = {"Boots", "Athletic/Sneaker", "Casual", "Dress"};
+const int NUM_SHOE_STYLES = sizeof(shoeStyles) / sizeof(shoeStyles[0]);
+String selectedShoeStyle = "";
+// >>> ADDED
+ 
+ // Global variables for network processing (UI related)
+ static lv_obj_t* g_spinner = nullptr; // Global spinner object
 
 // Current entry for loss prevention logging
 static String currentEntry = "";
@@ -359,13 +374,24 @@ time_t parseTimestamp(const String& entry) {
     struct tm timeinfo = {0};
     int day, year, hour, minute, second;
     char monthStr[4];
-    if (sscanf(entry.c_str(), "%d-%3s-%d %d:%d:%d", &day, monthStr, &year, &hour, &minute, &second) == 6) {
+    char ampmStr[3] = {0}; // Buffer for AM/PM
+    // Updated sscanf to parse 12-hour format (%I) and AM/PM (%2s)
+    if (sscanf(entry.c_str(), "%d-%3s-%d %d:%d:%d %2s", &day, monthStr, &year, &hour, &minute, &second, ampmStr) == 7) {
         timeinfo.tm_mday = day;
         timeinfo.tm_year = year - 1900;
-        timeinfo.tm_hour = hour;
         timeinfo.tm_min = minute;
         timeinfo.tm_sec = second;
-        timeinfo.tm_isdst = -1;
+        timeinfo.tm_isdst = -1; // Let mktime determine DST
+
+        // Convert 12-hour format to 24-hour format
+        if (strcmp(ampmStr, "PM") == 0 && hour != 12) {
+            timeinfo.tm_hour = hour + 12;
+        } else if (strcmp(ampmStr, "AM") == 0 && hour == 12) { // Handle midnight (12 AM)
+            timeinfo.tm_hour = 0;
+        } else {
+            timeinfo.tm_hour = hour;
+        }
+
         static const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
         for (int i = 0; i < 12; i++) {
             if (strncmp(monthStr, months[i], 3) == 0) {
@@ -375,7 +401,7 @@ time_t parseTimestamp(const String& entry) {
         }
         return mktime(&timeinfo);
     }
-    return 0;
+    return 0; // Return 0 if parsing fails
 }
 
 // getTimestamp (unchanged)
@@ -394,7 +420,7 @@ String getTimestamp() {
     timeinfo.tm_isdst = -1;
     if (timeinfo.tm_year > 70) {
         char buffer[25];
-        strftime(buffer, sizeof(buffer), "%d-%b-%Y %H:%M:%S", &timeinfo);
+        strftime(buffer, sizeof(buffer), "%d-%b-%Y %I:%M:%S %p", &timeinfo); // Use %I for 12-hour, %p for AM/PM
         return String(buffer);
     }
     return "NoTime";
@@ -607,7 +633,11 @@ void createViewLogsScreen() {
 
                 struct tm* entry_time = localtime(&entry->timestamp);
                 char time_str[16];
-                strftime(time_str, sizeof(time_str), "%H:%M", entry_time);
+                strftime(time_str, sizeof(time_str), "%I:%M %p", entry_time); // Use %I for 12-hour, %p for AM/PM
+                // Remove leading zero if present (e.g., "02:30 PM" -> "2:30 PM") - Optional but cleaner
+                if (time_str[0] == '0') {
+                    memmove(time_str, time_str + 1, strlen(time_str));
+                }
                 String entry_label_str = "Entry " + String(entry_num++) + ": " + String(time_str);
 
                 lv_obj_t* label = lv_label_create(entry_btn);
@@ -626,79 +656,97 @@ void createViewLogsScreen() {
                         return;
                     }
 
-                    // Assuming log format is like "YYYY-MM-DD HH:MM:SS: Data..."
-                    int colon_pos = log_entry->text.indexOf(": "); // Find first colon-space after timestamp
-                     if (colon_pos != -1 && colon_pos < log_entry->text.length() - 2) {
-                         // Find the third colon which should mark the end of seconds
-                         int third_colon_pos = -1;
-                         int first_colon = log_entry->text.indexOf(':');
-                         int second_colon = -1;
-                         if(first_colon != -1) second_colon = log_entry->text.indexOf(':', first_colon + 1);
-                         if(second_colon != -1) third_colon_pos = log_entry->text.indexOf(':', second_colon + 1);
+                    // --- Format the timestamp for the message box title ---
+                    struct tm* entry_tm = localtime(&log_entry->timestamp);
+                    char formatted_timestamp[32]; // Buffer for "YYYY-MM-DD HH:MM:SS AM/PM"
+                    strftime(formatted_timestamp, sizeof(formatted_timestamp), "%Y-%m-%d %I:%M:%S %p", entry_tm);
 
-                         if (third_colon_pos != -1 && third_colon_pos < log_entry->text.length() - 2) {
-                            String entry_data = log_entry->text.substring(third_colon_pos + 2); // Get text after "HH:MM:SS: "
-                            entry_data.trim(); // Clean up whitespace
+                    // --- Extract the data part of the log entry ---
+                    // Find the end of the timestamp (second space after the date)
+                    int first_space = log_entry->text.indexOf(' ');
+                    int second_space = -1;
+                    if (first_space != -1) {
+                        second_space = log_entry->text.indexOf(' ', first_space + 1);
+                    }
+                    int third_space = -1;
+                     if (second_space != -1) {
+                        third_space = log_entry->text.indexOf(' ', second_space + 1); // Space after AM/PM
+                    }
 
-                            if (entry_data.isEmpty()) {
-                                DEBUG_PRINT("Extracted log data is empty");
-                                return;
+                    String entry_data = "";
+                    bool parse_success = false; // Flag to track if data extraction worked
+
+                    if (third_space != -1 && third_space < log_entry->text.length() - 2) {
+                        // Find the colon after the timestamp
+                        int data_start_colon = log_entry->text.indexOf(':', third_space + 1);
+                        if (data_start_colon != -1 && data_start_colon < log_entry->text.length() - 2) {
+                             entry_data = log_entry->text.substring(data_start_colon + 2); // Get text after ": "
+                             entry_data.trim(); // Clean up whitespace
+                             if (!entry_data.isEmpty()) {
+                                 parse_success = true; // Data extracted successfully
+                             } else {
+                                 DEBUG_PRINT("Extracted log data is empty after trim");
+                                 entry_data = "(No data)"; // Provide fallback text for display if needed
+                             }
+                        } else {
+                             DEBUG_PRINT("Could not find colon after timestamp in log entry.");
+                        }
+                    } else {
+                        DEBUG_PRINT("Could not find third space (after AM/PM) in log entry.");
+                    }
+
+                    // --- Only create the message box if parsing was successful ---
+                    if (parse_success) {
+                        // --- Call the simplified getFormattedEntry with ONLY the data ---
+                        String formatted_data = getFormattedEntry(entry_data);
+
+                        // --- Combine formatted timestamp and data for the message box ---
+                        String full_message = "Time: " + String(formatted_timestamp) + "\n" + formatted_data;
+
+                        // Create message box (modal by default)
+                        lv_obj_t* msgbox = lv_msgbox_create(NULL); // Parent NULL -> Attach to top layer, creates modal bg
+                        lv_obj_set_size(msgbox, 280, 180);
+                        lv_obj_center(msgbox);
+                        // Style the message box window itself
+                        lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0); // Fully opaque msgbox window
+                        lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0); // Gray background
+                        lv_obj_set_style_pad_all(msgbox, 10, 0); // Padding inside msgbox
+
+                        // Title for the message box
+                        lv_obj_t* msg_title = lv_msgbox_add_title(msgbox, "Log Entry Details");
+
+                        // Text content for the message box
+                        lv_obj_t* msg_text = lv_msgbox_add_text(msgbox, full_message.c_str()); // Use full_message here
+                        lv_obj_set_style_text_font(msg_text, &lv_font_montserrat_14, 0); // Example font
+                        lv_obj_set_style_text_line_space(msg_text, 2, 0);
+
+                        // Add a close button to the message box
+                        lv_obj_t* close_btn = lv_msgbox_add_footer_button(msgbox, "Close");
+
+                        // --- ** CORRECTED Close Button Event Callback ** ---
+                        lv_obj_add_event_cb(close_btn, [](lv_event_t* e_close) {
+                            // Get the message box object itself by navigating up the hierarchy
+                            // Button -> footer -> msgbox
+                            lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_close);
+                            lv_obj_t* footer = lv_obj_get_parent(btn);
+                            lv_obj_t* current_msgbox = lv_obj_get_parent(footer);
+
+                            // Delete the message box. LVGL handles removing the modal background automatically.
+                            if (current_msgbox) {
+                                 lv_msgbox_close(current_msgbox); // Preferred way for msgbox
                             }
 
-                            String formatted_entry = getFormattedEntry(entry_data); // Use your formatting function
+                            // *** NO NEED to manually set parent screen opacity ***
 
-                            // Create message box (modal by default)
-                            lv_obj_t* msgbox = lv_msgbox_create(NULL); // Parent NULL -> Attach to top layer, creates modal bg
-                            lv_obj_set_size(msgbox, 280, 180);
-                            lv_obj_center(msgbox);
-                            // Style the message box window itself
-                            lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0); // Fully opaque msgbox window
-                            lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0); // Gray background
-                            lv_obj_set_style_pad_all(msgbox, 10, 0); // Padding inside msgbox
+                            lv_task_handler(); // Process the deletion and redraw
+                            DEBUG_PRINT("Log entry message box closed.");
 
-                            // Title for the message box
-                            lv_obj_t* msg_title = lv_msgbox_add_title(msgbox, "Log Entry Details");
+                        }, LV_EVENT_CLICKED, NULL); // No user data needed here anymore for this purpose
 
-                            // Text content for the message box
-                            lv_obj_t* msg_text = lv_msgbox_add_text(msgbox, formatted_entry.c_str());
-                            lv_obj_set_style_text_font(msg_text, &lv_font_montserrat_14, 0); // Example font
-                            lv_obj_set_style_text_line_space(msg_text, 2, 0);
-
-
-                            // Add a close button to the message box
-                            lv_obj_t* close_btn = lv_msgbox_add_footer_button(msgbox, "Close");
-
-                            // --- ** CORRECTED Close Button Event Callback ** ---
-                            lv_obj_add_event_cb(close_btn, [](lv_event_t* e_close) {
-                                // Get the message box object itself by navigating up the hierarchy
-                                // Button -> footer -> msgbox
-                                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_close);
-                                lv_obj_t* footer = lv_obj_get_parent(btn);
-                                lv_obj_t* current_msgbox = lv_obj_get_parent(footer);
-
-                                // Delete the message box. LVGL handles removing the modal background automatically.
-                                if (current_msgbox) {
-                                     lv_msgbox_close(current_msgbox); // Preferred way for msgbox
-                                     // OR delete directly if lv_msgbox_close isn't sufficient/available
-                                     // lv_obj_delete(current_msgbox);
-                                }
-
-                                // *** NO NEED to manually set parent screen opacity ***
-                                // The original screen (logs_screen) was never made transparent,
-                                // only obscured by the msgbox's modal background, which is now gone.
-
-                                lv_task_handler(); // Process the deletion and redraw
-                                DEBUG_PRINT("Log entry message box closed.");
-
-                            }, LV_EVENT_CLICKED, NULL); // No user data needed here anymore for this purpose
-
-                            // lv_obj_move_foreground(msgbox); // msgbox_create(NULL) already puts it on top layer
-                         } else {
-                             DEBUG_PRINT("Could not find third colon in log entry text.");
-                         }
-                    } else {
-                        DEBUG_PRINT("Could not find ': ' separator in log entry text.");
+                        // lv_obj_move_foreground(msgbox); // msgbox_create(NULL) already puts it on top layer
                     }
+                    // Removed the dangling 'else' blocks that caused syntax errors.
+                    // Parsing failure messages are handled by the DEBUG_PRINT statements above.
                 }, LV_EVENT_CLICKED, NULL);
             } // End loop through entries
         } // End else (entries exist)
@@ -2063,9 +2111,9 @@ void createColorMenuShirt() {
             colorMenu = nullptr;
             // <<< MODIFIED: Build entry with Gender, ApparelType-ShirtColor
             currentEntry = selectedGender + "," + selectedApparelType + "-" + selectedShirtColors + ",";
-            DEBUG_PRINTF("Transitioning to pants menu. Current Entry: %s\n", currentEntry.c_str());
+            DEBUG_PRINTF("Transitioning to pants type menu. Current Entry: %s\n", currentEntry.c_str()); // Updated debug message
             // >>> MODIFIED
-            createColorMenuPants();
+            createPantsTypeMenu(); // <<< CORRECTED: Navigate to pants type selection
             if (old_menu && old_menu != lv_scr_act()) {
                 lv_obj_del_async(old_menu);
             }
@@ -2076,6 +2124,134 @@ void createColorMenuShirt() {
     lv_scr_load(colorMenu);
     DEBUG_PRINT("Shirt color menu loaded");
 }
+
+// <<< ADDED: New menu for selecting pants type
+void createPantsTypeMenu() {
+    DEBUG_PRINT("Creating Pants Type Menu");
+    selectedPantsType = ""; // Reset selection
+
+    // Create the screen
+    lv_obj_t* pants_type_screen = lv_obj_create(NULL);
+    lv_obj_add_style(pants_type_screen, &style_screen, 0);
+    lv_obj_set_style_bg_color(pants_type_screen, lv_color_hex(0x1A1A1A), 0);
+    lv_obj_set_style_bg_opa(pants_type_screen, LV_OPA_COVER, 0);
+    lv_obj_add_flag(pants_type_screen, LV_OBJ_FLAG_SCROLLABLE);
+    current_scroll_obj = pants_type_screen; // Allow scrolling if needed
+
+    // Back Button (Top-Left)
+    lv_obj_t* back_btn = lv_btn_create(pants_type_screen);
+    lv_obj_set_size(back_btn, 60, 40);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_radius(back_btn, 5, 0);
+    lv_obj_add_style(back_btn, &style_btn, 0);
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
+    lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        // Go back to shirt color selection, clear relevant parts of entry
+        currentEntry = selectedGender + "," + selectedApparelType + "-" + selectedShirtColors + ",";
+        createColorMenuShirt();
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Title
+    lv_obj_t* title = lv_label_create(pants_type_screen);
+    lv_label_set_text(title, "Select Pants Type");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+
+    // Pants Type Options Grid
+    lv_obj_t* grid = lv_obj_create(pants_type_screen);
+    lv_obj_set_size(grid, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 70); // Adjust size as needed
+    lv_obj_align(grid, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
+    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+    static lv_coord_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}; // 2 columns
+    // Adjust rows based on NUM_PANTS_TYPES
+    // Use static array for row descriptors
+    static lv_coord_t row_dsc[] = {60, 60, 60, LV_GRID_TEMPLATE_LAST}; // Assuming max 3 rows needed for 5 items + LAST
+    // Note: If NUM_PANTS_TYPES increases significantly, this array size needs adjustment.
+    // A more dynamic approach might be needed for many items, but static is safer here.
+
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    lv_obj_set_style_pad_column(grid, 10, 0);
+    lv_obj_set_style_pad_row(grid, 10, 0);
+
+    for (int i = 0; i < NUM_PANTS_TYPES; i++) {
+        lv_obj_t* card = lv_obj_create(grid);
+        lv_obj_set_grid_cell(card, LV_GRID_ALIGN_STRETCH, i % 2, 1, LV_GRID_ALIGN_STRETCH, i / 2, 1);
+        lv_obj_set_height(card, 60); // Fixed height for cards
+        lv_obj_add_style(card, &style_card, 0); // Use existing card style
+        lv_obj_add_style(card, &style_card_pressed, LV_STATE_PRESSED);
+
+        lv_obj_t* label = lv_label_create(card);
+        lv_label_set_text(label, pantsTypes[i]);
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+
+        // Store the pants type text in user data
+        lv_obj_set_user_data(card, (void*)pantsTypes[i]);
+
+        lv_obj_add_event_cb(card, pants_type_card_event_cb, LV_EVENT_CLICKED, NULL); // <<< Use static function
+        /* Original Lambda: (Comment closed below)
+        [](lv_event_t* e) {
+            lv_obj_t* target_card = (lv_obj_t*)lv_event_get_target(e);
+            const char* type = (const char*)lv_obj_get_user_data(target_card);
+            if (type) {
+                selectedPantsType = String(type);
+                DEBUG_PRINTF("Pants Type selected: %s\n", selectedPantsType.c_str());
+                createColorMenuPants(); // Proceed to pants color selection
+            }
+        }; // End of lambda body
+        */ // <<< Correctly closing the comment block
+        // }, LV_EVENT_CLICKED, NULL); // Original event registration line (now commented out)
+    }
+
+    lv_scr_load(pants_type_screen);
+    DEBUG_PRINT("Pants Type menu loaded");
+}
+// >>> ADDED
+
+// <<< ADDED: Static callback for pants type card clicks
+static void pants_type_card_event_cb(lv_event_t* e) {
+    lv_obj_t* target_card = (lv_obj_t*)lv_event_get_target(e);
+    const char* type = (const char*)lv_obj_get_user_data(target_card);
+    if (type) {
+        selectedPantsType = String(type);
+        DEBUG_PRINTF("Pants Type selected: %s\n", selectedPantsType.c_str());
+        createColorMenuPants(); // Proceed to pants color selection
+    }
+}
+// >>> ADDED
+
+// <<< ADDED: Static callback for pants color next button clicks
+static void pants_color_next_btn_event_cb(lv_event_t* e) {
+    if (selectedPantsColors.isEmpty()) {
+        lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
+        lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
+        lv_timer_create([](lv_timer_t* timer) {
+            lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+            lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
+            lv_timer_del(timer);
+        }, 200, header);
+    } else {
+        lv_obj_t* old_menu = colorMenu;
+        colorMenu = nullptr;
+        // Build entry with PantsType-PantsColor
+        currentEntry += selectedPantsType + "-" + selectedPantsColors + ",";
+        DEBUG_PRINTF("Transitioning to shoe style menu. Current Entry: %s\n", currentEntry.c_str()); // Updated debug message
+        createShoeStyleMenu(); // <<< MODIFIED: Go to shoe style selection first
+        if (old_menu && old_menu != lv_scr_act()) {
+            lv_obj_del_async(old_menu);
+        }
+    }
+}
+// >>> ADDED
+
 // createColorMenuPants (unchanged)
 void createColorMenuPants() {
     DEBUG_PRINT("Creating Pants Color Menu");
@@ -2244,31 +2420,110 @@ void createColorMenuPants() {
     lv_label_set_text(next_label, "Next " LV_SYMBOL_RIGHT);
     lv_obj_set_style_text_font(next_label, &lv_font_montserrat_16, 0);
     lv_obj_center(next_label);
-    lv_obj_add_event_cb(pants_next_btn, [](lv_event_t* e) {
-        if (selectedPantsColors.isEmpty()) {
-            lv_obj_t* header = lv_obj_get_child(lv_scr_act(), 0);
-            lv_obj_set_style_bg_color(header, lv_color_hex(0xFF0000), 0);
-            lv_timer_create([](lv_timer_t* timer) {
-                lv_obj_t* header = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
-                lv_obj_set_style_bg_color(header, lv_color_hex(0x3A3A3A), 0);
-                lv_timer_del(timer);
-            }, 200, header);
-        } else {
-            lv_obj_t* old_menu = colorMenu;
-            colorMenu = nullptr;
-            currentEntry += selectedPantsColors + ",";
-            DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s\n", selectedPantsColors.c_str());
-            createColorMenuShoes();
-            if (old_menu && old_menu != lv_scr_act()) {
-                lv_obj_del_async(old_menu);
-            }
-        }
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(pants_next_btn, pants_color_next_btn_event_cb, LV_EVENT_CLICKED, NULL); // Use static function
     DEBUG_PRINT("Next button created");
 
     lv_scr_load(colorMenu);
     DEBUG_PRINT("Pants color menu loaded");
 }
+
+// <<< ADDED: New menu for selecting shoe style
+void createShoeStyleMenu() {
+    DEBUG_PRINT("Creating Shoe Style Menu");
+    selectedShoeStyle = ""; // Reset selection
+
+    // Create the screen
+    lv_obj_t* shoe_style_screen = lv_obj_create(NULL);
+    lv_obj_add_style(shoe_style_screen, &style_screen, 0);
+    lv_obj_set_style_bg_color(shoe_style_screen, lv_color_hex(0x1A1A1A), 0);
+    lv_obj_set_style_bg_opa(shoe_style_screen, LV_OPA_COVER, 0);
+    lv_obj_add_flag(shoe_style_screen, LV_OBJ_FLAG_SCROLLABLE);
+    current_scroll_obj = shoe_style_screen; // Allow scrolling if needed
+
+    // Back Button (Top-Left)
+    lv_obj_t* back_btn = lv_btn_create(shoe_style_screen);
+    lv_obj_set_size(back_btn, 60, 40);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_radius(back_btn, 5, 0);
+    lv_obj_add_style(back_btn, &style_btn, 0);
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
+    lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        // Go back to pants color selection, clear relevant parts of entry
+        // Find the last comma before the shoe part (which hasn't been added yet)
+        int lastComma = currentEntry.lastIndexOf(',');
+        if (lastComma > 0) { // Ensure there is a comma
+            int secondLastComma = currentEntry.lastIndexOf(',', lastComma - 1);
+             if (secondLastComma >= 0) { // Ensure there's a section before pants
+                 // Remove the pants section (PantsType-PantsColor,)
+                 currentEntry = currentEntry.substring(0, secondLastComma + 1);
+             } else { // Only gender and shirt were added, should not happen here but handle defensively
+                 currentEntry = currentEntry.substring(0, lastComma + 1);
+             }
+        }
+        DEBUG_PRINTF("Going back to Pants Color. Entry reset to: %s\n", currentEntry.c_str());
+        createColorMenuPants();
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Title
+    lv_obj_t* title = lv_label_create(shoe_style_screen);
+    lv_label_set_text(title, "Select Shoe Style");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+
+    // Shoe Style Options Grid
+    lv_obj_t* grid = lv_obj_create(shoe_style_screen);
+    lv_obj_set_size(grid, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 70); // Adjust size as needed
+    lv_obj_align(grid, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
+    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+    static lv_coord_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}; // 2 columns
+    // Adjust rows based on NUM_SHOE_STYLES
+    static lv_coord_t row_dsc[] = {60, 60, LV_GRID_TEMPLATE_LAST}; // 2 rows needed for 4 items + LAST
+
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    lv_obj_set_style_pad_column(grid, 10, 0);
+    lv_obj_set_style_pad_row(grid, 10, 0);
+
+    for (int i = 0; i < NUM_SHOE_STYLES; i++) {
+        lv_obj_t* card = lv_obj_create(grid);
+        lv_obj_set_grid_cell(card, LV_GRID_ALIGN_STRETCH, i % 2, 1, LV_GRID_ALIGN_STRETCH, i / 2, 1);
+        lv_obj_set_height(card, 60); // Fixed height for cards
+        lv_obj_add_style(card, &style_card, 0); // Use existing card style
+        lv_obj_add_style(card, &style_card_pressed, LV_STATE_PRESSED);
+
+        lv_obj_t* label = lv_label_create(card);
+        lv_label_set_text(label, shoeStyles[i]);
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+
+        // Store the shoe style text in user data
+        lv_obj_set_user_data(card, (void*)shoeStyles[i]);
+
+        lv_obj_add_event_cb(card, [](lv_event_t* e) {
+            lv_obj_t* target_card = (lv_obj_t*)lv_event_get_target(e);
+            const char* style = (const char*)lv_obj_get_user_data(target_card);
+            if (style) {
+                selectedShoeStyle = String(style);
+                // Handle "/" in style name for filename/entry safety if needed later
+                // selectedShoeStyle.replace("/", "-"); // Example replacement
+                DEBUG_PRINTF("Shoe Style selected: %s\n", selectedShoeStyle.c_str());
+                createColorMenuShoes(); // Proceed to shoe color selection
+            }
+        }, LV_EVENT_CLICKED, NULL);
+    }
+
+    lv_scr_load(shoe_style_screen);
+    DEBUG_PRINT("Shoe Style menu loaded");
+}
+// >>> ADDED
+
 // createColorMenuShoes (unchanged)
 void createColorMenuShoes() {
     DEBUG_PRINT("Creating Shoes Color Menu");
@@ -2415,7 +2670,7 @@ void createColorMenuShoes() {
         lv_obj_t* old_menu = colorMenu;
         colorMenu = nullptr;
         selectedShoesColors = "";
-        createColorMenuPants();
+        createShoeStyleMenu(); // <<< MODIFIED: Go back to shoe style selection
         if (old_menu && old_menu != lv_scr_act()) {
             lv_obj_del_async(old_menu);
         }
@@ -2449,8 +2704,9 @@ void createColorMenuShoes() {
         } else {
             lv_obj_t* old_menu = colorMenu;
             colorMenu = nullptr;
-            currentEntry += selectedShoesColors + ",";
-            DEBUG_PRINTF("Transitioning to item menu with Shoes: %s\n", selectedShoesColors.c_str());
+            // <<< MODIFIED: Build entry with ShoeStyle-ShoeColor
+            currentEntry += selectedShoeStyle + "-" + selectedShoesColors + ",";
+            DEBUG_PRINTF("Transitioning to item menu. Final Entry Segment: %s-%s\n", selectedShoeStyle.c_str(), selectedShoesColors.c_str());
             createItemMenu();
             if (old_menu && old_menu != lv_scr_act()) {
                 lv_obj_del_async(old_menu);
@@ -2883,21 +3139,9 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
 
 // getFormattedEntry (unchanged)
 String getFormattedEntry(const String& entry) {
+    // This function now assumes 'entry' contains only the data part,
+    // not the timestamp. Timestamp formatting is handled by the caller.
     String entryData = entry;
-    String timestamp = getTimestamp(); // Default to current timestamp
-
-    // Check if the entry contains a timestamp
-    int colonPos = entry.indexOf(", ");
-    if (colonPos > 0 && colonPos <= 19 && entry.substring(0, 2).toInt() > 0) {
-        timestamp = entry.substring(0, colonPos + 1);
-        entryData = entry.substring(colonPos + 2);
-        DEBUG_PRINTF("Extracted timestamp: %s\n", timestamp.c_str());
-        DEBUG_PRINTF("Extracted entry data: %s\n", entryData.c_str());
-    } else {
-        entryData = entry;
-        DEBUG_PRINTF("No timestamp found, using raw entry: %s\n", entryData.c_str());
-    }
-
     // Parse the entry data into parts
     String parts[6]; // <<< MODIFIED: Increased size for Apparel Type + Shirt Color
     int partCount = 0, startIdx = 0;
@@ -2932,9 +3176,8 @@ String getFormattedEntry(const String& entry) {
     }
     // >>> ADDED
 
-    // Format the output
-    String formatted = "Time: " + timestamp + "\n";
-    formatted += "Gender: " + (partCount > 0 ? parts[0] : "N/A") + "\n";
+    // Format the output (Timestamp is now handled by the caller)
+    String formatted = "Gender: " + (partCount > 0 ? parts[0] : "N/A") + "\n";
     // <<< MODIFIED: Use split parts
     formatted += "Apparel: " + apparelType + "\n";
     formatted += "Shirt Color: " + shirtColor + "\n";
@@ -3147,10 +3390,21 @@ void sendWebhook(const String& entry) {
     jsonPayload += "\"gender\":\"" + gender + "\",";
     jsonPayload += "\"apparelType\":\"" + apparelType + "\",";
     jsonPayload += "\"shirt\":\"" + shirtColor + "\",";
-    jsonPayload += "\"pants\":\"" + pants + "\",";
+    // <<< ADDED: Split pants into type and color for webhook
+    String pantsType = "N/A";
+    String pantsColor = "N/A";
+    int hyphenPosPants = pants.indexOf('-');
+    if (hyphenPosPants != -1) {
+        pantsType = pants.substring(0, hyphenPosPants);
+        pantsColor = pants.substring(hyphenPosPants + 1);
+    } else if (pants != "N/A") {
+        pantsColor = pants; // Assume it's just color if no hyphen
+    }
+    jsonPayload += "\"pantsType\":\"" + pantsType + "\",";
+    jsonPayload += "\"pantsColor\":\"" + pantsColor + "\",";
+    // >>> ADDED
     jsonPayload += "\"shoes\":\"" + shoes + "\",";
     jsonPayload += "\"item\":\"" + item + "\"";
-    // >>> MODIFIED
 
     jsonPayload += "}";
 
@@ -4383,7 +4637,7 @@ void updateStatus(const char* message, uint32_t color) {
     timeinfo.tm_hour = TimeStruct.hours;
     timeinfo.tm_min = TimeStruct.minutes;
     timeinfo.tm_sec = TimeStruct.seconds;
-    strftime(time_str, sizeof(time_str), "%I:%M %p", &timeinfo);
+    strftime(time_str, sizeof(time_str), "%I:%M %p", &timeinfo); // Use %I for 12-hour, %p for AM/PM
 
     // Remove leading zero if present (e.g., "02:30 PM" -> "2:30 PM")
     if (time_str[0] == '0') {
