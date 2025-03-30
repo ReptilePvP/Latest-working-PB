@@ -110,6 +110,7 @@ void createColorMenuShirt();
 void createColorMenuPants();
 void createColorMenuShoes();
 void createItemMenu();
+void createApparelTypeMenu(); // <<< ADDED: Forward declaration for new menu
 void createConfirmScreen();
 void scanNetworks();
 void showWiFiKeyboard();
@@ -153,6 +154,11 @@ String selectedPantsColors = "";
 String selectedShoesColors = "";
 String selectedGender = "";
 String selectedItem = "";
+// <<< ADDED: New globals for apparel type
+const char* apparelTypes[] = {"Hoodie", "Jacket", "Long Sleeve", "Short Sleeve"};
+const int NUM_APPAREL_TYPES = sizeof(apparelTypes) / sizeof(apparelTypes[0]);
+String selectedApparelType = "";
+// >>> ADDED
 
 // Global variables for network processing (UI related)
 static lv_obj_t* g_spinner = nullptr; // Global spinner object
@@ -1769,16 +1775,18 @@ void createGenderMenu() {
         if (strcmp(genders[i], "Male") == 0) {
             lv_obj_add_event_cb(card, [](lv_event_t* e) {
                 DEBUG_PRINT("Male selected");
-                currentEntry = "Male,";
-                DEBUG_PRINTF("Current entry: %s\n", currentEntry.c_str());
-                createColorMenuShirt();
+                selectedGender = "Male"; // <<< MODIFIED: Store gender
+                // currentEntry = "Male,"; // <<< REMOVED: Entry built later
+                // DEBUG_PRINTF("Current entry: %s\n", currentEntry.c_str());
+                createApparelTypeMenu(); // <<< MODIFIED: Go to apparel type menu
             }, LV_EVENT_CLICKED, NULL);
         } else if (strcmp(genders[i], "Female") == 0) {
             lv_obj_add_event_cb(card, [](lv_event_t* e) {
                 DEBUG_PRINT("Female selected");
-                currentEntry = "Female,";
-                DEBUG_PRINTF("Current entry: %s\n", currentEntry.c_str());
-                createColorMenuShirt();
+                selectedGender = "Female"; // <<< MODIFIED: Store gender
+                // currentEntry = "Female,"; // <<< REMOVED: Entry built later
+                // DEBUG_PRINTF("Current entry: %s\n", currentEntry.c_str());
+                createApparelTypeMenu(); // <<< MODIFIED: Go to apparel type menu
             }, LV_EVENT_CLICKED, NULL);
         }
 
@@ -1787,6 +1795,87 @@ void createGenderMenu() {
 
     lv_scr_load(gender_screen);
 }
+
+// <<< ADDED: New menu for selecting apparel type
+void createApparelTypeMenu() {
+    DEBUG_PRINT("Creating Apparel Type Menu");
+
+    // Create the screen
+    lv_obj_t* apparel_screen = lv_obj_create(NULL);
+    lv_obj_add_style(apparel_screen, &style_screen, 0);
+    lv_obj_set_style_bg_color(apparel_screen, lv_color_hex(0x1A1A1A), 0);
+    lv_obj_set_style_bg_opa(apparel_screen, LV_OPA_COVER, 0);
+    lv_obj_add_flag(apparel_screen, LV_OBJ_FLAG_SCROLLABLE);
+    current_scroll_obj = apparel_screen; // Allow scrolling if needed
+
+    // Back Button (Top-Left)
+    lv_obj_t* back_btn = lv_btn_create(apparel_screen);
+    lv_obj_set_size(back_btn, 60, 40);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_radius(back_btn, 5, 0);
+    lv_obj_add_style(back_btn, &style_btn, 0);
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
+    lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        selectedGender = ""; // Clear gender selection on going back
+        createGenderMenu();
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Title
+    lv_obj_t* title = lv_label_create(apparel_screen);
+    lv_label_set_text(title, "Select Apparel Type");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+
+    // Apparel Type Options Grid
+    lv_obj_t* grid = lv_obj_create(apparel_screen);
+    lv_obj_set_size(grid, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 70); // Adjust size as needed
+    lv_obj_align(grid, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
+    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+    static lv_coord_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}; // 2 columns
+    static lv_coord_t row_dsc[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST}; // Rows fit content
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    lv_obj_set_style_pad_column(grid, 10, 0);
+    lv_obj_set_style_pad_row(grid, 10, 0);
+
+    for (int i = 0; i < NUM_APPAREL_TYPES; i++) {
+        lv_obj_t* card = lv_obj_create(grid);
+        lv_obj_set_grid_cell(card, LV_GRID_ALIGN_STRETCH, i % 2, 1, LV_GRID_ALIGN_STRETCH, i / 2, 1);
+        lv_obj_set_height(card, 60); // Fixed height for cards
+        lv_obj_add_style(card, &style_card, 0); // Use existing card style
+        lv_obj_add_style(card, &style_card_pressed, LV_STATE_PRESSED);
+
+        lv_obj_t* label = lv_label_create(card);
+        lv_label_set_text(label, apparelTypes[i]);
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+
+        // Store the apparel type text in user data
+        lv_obj_set_user_data(card, (void*)apparelTypes[i]);
+
+        lv_obj_add_event_cb(card, [](lv_event_t* e) {
+            lv_obj_t* target_card = (lv_obj_t*)lv_event_get_target(e);
+            const char* type = (const char*)lv_obj_get_user_data(target_card);
+            if (type) {
+                selectedApparelType = String(type);
+                DEBUG_PRINTF("Apparel Type selected: %s\n", selectedApparelType.c_str());
+                createColorMenuShirt(); // Proceed to shirt color selection
+            }
+        }, LV_EVENT_CLICKED, NULL);
+    }
+
+    lv_scr_load(apparel_screen);
+    DEBUG_PRINT("Apparel Type menu loaded");
+}
+// >>> ADDED
+
 // createColorMenuShirt (unchanged)
 void createColorMenuShirt() {
     DEBUG_PRINT("Creating Shirt Color Menu");
@@ -1823,7 +1912,10 @@ void createColorMenuShirt() {
     lv_obj_set_style_radius(header, 10, 0);
     lv_obj_set_style_border_width(header, 0, 0);
     lv_obj_t* title = lv_label_create(header);
-    lv_label_set_text(title, "Shirt Color");
+    // <<< MODIFIED: Dynamic title based on apparel type
+    String title_text = "Select " + selectedApparelType + " Color";
+    lv_label_set_text(title, title_text.c_str());
+    // >>> MODIFIED
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_center(title);
@@ -1835,7 +1927,7 @@ void createColorMenuShirt() {
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
     lv_obj_set_layout(grid, LV_LAYOUT_GRID);
     static lv_coord_t col_dsc[] = {140, 140, LV_GRID_TEMPLATE_LAST}; // 2 columns
-    static lv_coord_t row_dsc[] = {60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 4 rows
+    static lv_coord_t row_dsc[] = {60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 6 rows for 12 colors
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
     lv_obj_set_style_pad_all(grid, 5, 0);
 
@@ -1847,7 +1939,8 @@ void createColorMenuShirt() {
     ColorInfo colorMap[] = {
         {"Red", 0xFF0000}, {"Orange", 0xFFA500}, {"Yellow", 0xFFFF00},
         {"Green", 0x00FF00}, {"Blue", 0x0000FF}, {"Purple", 0x800080},
-        {"Black", 0x000000}, {"White", 0xFFFFFF}
+        {"Black", 0x000000}, {"White", 0xFFFFFF}, {"Pink", 0xFFC0CB},
+        {"Brown", 0xA52A2A}, {"Silver", 0xC0C0C0}, {"Grey", 0x808080}
     };
     const int numColors = sizeof(colorMap) / sizeof(colorMap[0]);
     DEBUG_PRINTF("Creating %d shirt color buttons\n", numColors);
@@ -1932,7 +2025,9 @@ void createColorMenuShirt() {
         lv_obj_t* old_menu = colorMenu;
         colorMenu = nullptr;
         selectedShirtColors = "";
-        createGenderMenu();
+        // <<< MODIFIED: Go back to apparel type selection
+        createApparelTypeMenu();
+        // >>> MODIFIED
         if (old_menu && old_menu != lv_scr_act()) {
             lv_obj_del_async(old_menu);
         }
@@ -1966,8 +2061,10 @@ void createColorMenuShirt() {
         } else {
             lv_obj_t* old_menu = colorMenu;
             colorMenu = nullptr;
-            currentEntry += selectedShirtColors + ",";
-            DEBUG_PRINTF("Transitioning to pants menu with Shirt: %s\n", selectedShirtColors.c_str());
+            // <<< MODIFIED: Build entry with Gender, ApparelType-ShirtColor
+            currentEntry = selectedGender + "," + selectedApparelType + "-" + selectedShirtColors + ",";
+            DEBUG_PRINTF("Transitioning to pants menu. Current Entry: %s\n", currentEntry.c_str());
+            // >>> MODIFIED
             createColorMenuPants();
             if (old_menu && old_menu != lv_scr_act()) {
                 lv_obj_del_async(old_menu);
@@ -2027,7 +2124,7 @@ void createColorMenuPants() {
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
     lv_obj_set_layout(grid, LV_LAYOUT_GRID);
     static lv_coord_t col_dsc[] = {140, 140, LV_GRID_TEMPLATE_LAST}; // 2 columns
-    static lv_coord_t row_dsc[] = {60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 4 rows
+    static lv_coord_t row_dsc[] = {60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 6 rows for 12 colors
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
     lv_obj_set_style_pad_all(grid, 5, 0);
 
@@ -2039,7 +2136,8 @@ void createColorMenuPants() {
     ColorInfo colorMap[] = {
         {"Red", 0xFF0000}, {"Orange", 0xFFA500}, {"Yellow", 0xFFFF00},
         {"Green", 0x00FF00}, {"Blue", 0x0000FF}, {"Purple", 0x800080},
-        {"Black", 0x000000}, {"White", 0xFFFFFF}
+        {"Black", 0x000000}, {"White", 0xFFFFFF}, {"Pink", 0xFFC0CB},
+        {"Brown", 0xA52A2A}, {"Silver", 0xC0C0C0}, {"Grey", 0x808080}
     };
     const int numColors = sizeof(colorMap) / sizeof(colorMap[0]);
     DEBUG_PRINTF("Creating %d pants color buttons\n", numColors);
@@ -2219,7 +2317,7 @@ void createColorMenuShoes() {
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
     lv_obj_set_layout(grid, LV_LAYOUT_GRID);
     static lv_coord_t col_dsc[] = {140, 140, LV_GRID_TEMPLATE_LAST}; // 2 columns
-    static lv_coord_t row_dsc[] = {60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 4 rows
+    static lv_coord_t row_dsc[] = {60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST}; // 6 rows for 12 colors
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
     lv_obj_set_style_pad_all(grid, 5, 0);
 
@@ -2231,7 +2329,8 @@ void createColorMenuShoes() {
     ColorInfo colorMap[] = {
         {"Red", 0xFF0000}, {"Orange", 0xFFA500}, {"Yellow", 0xFFFF00},
         {"Green", 0x00FF00}, {"Blue", 0x0000FF}, {"Purple", 0x800080},
-        {"Black", 0x000000}, {"White", 0xFFFFFF}
+        {"Black", 0x000000}, {"White", 0xFFFFFF}, {"Pink", 0xFFC0CB},
+        {"Brown", 0xA52A2A}, {"Silver", 0xC0C0C0}, {"Grey", 0x808080}
     };
     const int numColors = sizeof(colorMap) / sizeof(colorMap[0]);
     DEBUG_PRINTF("Creating %d shoes color buttons\n", numColors);
@@ -2800,10 +2899,10 @@ String getFormattedEntry(const String& entry) {
     }
 
     // Parse the entry data into parts
-    String parts[5];
+    String parts[6]; // <<< MODIFIED: Increased size for Apparel Type + Shirt Color
     int partCount = 0, startIdx = 0;
     DEBUG_PRINTF("Parsing entryData: %s (length: %d)\n", entryData.c_str(), entryData.length());
-    for (int i = 0; i < entryData.length() && partCount < 5; i++) {
+    for (int i = 0; i < entryData.length() && partCount < 6; i++) { // <<< MODIFIED: Loop condition
         if (entryData.charAt(i) == ',') {
             parts[partCount] = entryData.substring(startIdx, i);
             DEBUG_PRINTF("Part %d: %s (from %d to %d)\n", partCount, parts[partCount].c_str(), startIdx, i);
@@ -2811,20 +2910,38 @@ String getFormattedEntry(const String& entry) {
             startIdx = i + 1;
         }
     }
-    if (startIdx < entryData.length()) {
+    if (startIdx < entryData.length() && partCount < 6) { // <<< MODIFIED: Check partCount
         parts[partCount] = entryData.substring(startIdx);
         DEBUG_PRINTF("Part %d: %s (from %d to end)\n", partCount, parts[partCount].c_str(), startIdx);
         partCount++;
     }
     DEBUG_PRINTF("Total parts found: %d\n", partCount);
 
+    // <<< ADDED: Split ApparelType-ShirtColor
+    String apparelType = "N/A";
+    String shirtColor = "N/A";
+    if (partCount > 1) {
+        int hyphenPos = parts[1].indexOf('-');
+        if (hyphenPos != -1) {
+            apparelType = parts[1].substring(0, hyphenPos);
+            shirtColor = parts[1].substring(hyphenPos + 1);
+        } else {
+            // Handle case where hyphen might be missing (e.g., old data)
+            shirtColor = parts[1]; // Assume it's just the color if no hyphen
+        }
+    }
+    // >>> ADDED
+
     // Format the output
     String formatted = "Time: " + timestamp + "\n";
     formatted += "Gender: " + (partCount > 0 ? parts[0] : "N/A") + "\n";
-    formatted += "Shirt: " + (partCount > 1 ? parts[1] : "N/A") + "\n";
+    // <<< MODIFIED: Use split parts
+    formatted += "Apparel: " + apparelType + "\n";
+    formatted += "Shirt Color: " + shirtColor + "\n";
+    // >>> MODIFIED
     formatted += "Pants: " + (partCount > 2 ? parts[2] : "N/A") + "\n";
     formatted += "Shoes: " + (partCount > 3 ? parts[3] : "N/A") + "\n";
-    formatted += "Item: " + (partCount > 4 ? parts[4] : "N/A");
+    formatted += "Item: " + (partCount > 4 ? parts[4] : "N/A"); // Item is now part 4
 
     DEBUG_PRINTF("Formatted: %s\n", formatted.c_str());
     return formatted;
@@ -3003,20 +3120,38 @@ void sendWebhook(const String& entry) {
     String timestamp = getTimestamp();
     String jsonPayload = "{";
     jsonPayload += "\"timestamp\":\"" + timestamp + "\",";
-    int colonPos = entry.indexOf(",");
-    int lastIndex = 0;
-    jsonPayload += "\"gender\":\"" + entry.substring(lastIndex, colonPos) + "\",";
-    lastIndex = colonPos + 1;
-    colonPos = entry.indexOf(",", lastIndex);
-    jsonPayload += "\"shirt\":\"" + entry.substring(lastIndex, colonPos) + "\",";
-    lastIndex = colonPos + 1;
-    colonPos = entry.indexOf(",", lastIndex);
-    jsonPayload += "\"pants\":\"" + entry.substring(lastIndex, colonPos) + "\",";
-    lastIndex = colonPos + 1;
-    colonPos = entry.indexOf(",", lastIndex);
-    jsonPayload += "\"shoes\":\"" + entry.substring(lastIndex, colonPos) + "\",";
-    lastIndex = colonPos + 1;
-    jsonPayload += "\"item\":\"" + entry.substring(lastIndex) + "\"";
+
+    // <<< MODIFIED: Parse entry string with ApparelType-ShirtColor format
+    int firstComma = entry.indexOf(',');
+    int secondComma = entry.indexOf(',', firstComma + 1);
+    int thirdComma = entry.indexOf(',', secondComma + 1);
+    int fourthComma = entry.indexOf(',', thirdComma + 1);
+
+    String gender = (firstComma != -1) ? entry.substring(0, firstComma) : "N/A";
+    String apparelShirt = (firstComma != -1 && secondComma != -1) ? entry.substring(firstComma + 1, secondComma) : "N/A";
+    String pants = (secondComma != -1 && thirdComma != -1) ? entry.substring(secondComma + 1, thirdComma) : "N/A";
+    String shoes = (thirdComma != -1 && fourthComma != -1) ? entry.substring(thirdComma + 1, fourthComma) : "N/A";
+    String item = (fourthComma != -1) ? entry.substring(fourthComma + 1) : "N/A";
+
+    // Split apparelShirt into type and color
+    String apparelType = "N/A";
+    String shirtColor = "N/A";
+    int hyphenPos = apparelShirt.indexOf('-');
+    if (hyphenPos != -1) {
+        apparelType = apparelShirt.substring(0, hyphenPos);
+        shirtColor = apparelShirt.substring(hyphenPos + 1);
+    } else if (apparelShirt != "N/A") {
+        shirtColor = apparelShirt; // Assume it's just color if no hyphen
+    }
+
+    jsonPayload += "\"gender\":\"" + gender + "\",";
+    jsonPayload += "\"apparelType\":\"" + apparelType + "\",";
+    jsonPayload += "\"shirt\":\"" + shirtColor + "\",";
+    jsonPayload += "\"pants\":\"" + pants + "\",";
+    jsonPayload += "\"shoes\":\"" + shoes + "\",";
+    jsonPayload += "\"item\":\"" + item + "\"";
+    // >>> MODIFIED
+
     jsonPayload += "}";
 
     DEBUG_PRINTF("Sending webhook payload: %s\n", jsonPayload.c_str());
@@ -4079,10 +4214,10 @@ void createLoadingScreen() {
 void updateLoadingProgress(lv_timer_t* timer) {
     lv_obj_t* bar = (lv_obj_t*)lv_timer_get_user_data(timer);
     int32_t value = lv_bar_get_value(bar);
-    value += 5;
+    value += 1; // Increment by 1 for a 5-second load time (100 steps * 50ms)
     lv_bar_set_value(bar, value, LV_ANIM_ON);
 
-    if (value >= 100) {
+    if (value >= 100) { // Check against the bar's maximum value (100)
         lv_timer_del(timer); // Delete the timer
 
         // Take the GUI semaphore to ensure exclusive access
@@ -4090,7 +4225,8 @@ void updateLoadingProgress(lv_timer_t* timer) {
             lv_obj_t* old_screen = lv_scr_act(); // Store reference to loading screen
             createLockScreen();                  // Create and load the lock screen
             if (old_screen && old_screen != lv_scr_act()) {
-                lv_obj_del(old_screen);          // Synchronously delete the loading screen
+                // Use lv_obj_del_async for potentially safer deletion from a timer callback context
+                lv_obj_del_async(old_screen);
             }
             xSemaphoreGive(xGuiSemaphore);       // Release semaphore
         } else {
@@ -4122,8 +4258,8 @@ void createLockScreen() {
 
     // Unlock Button
     lv_obj_t* unlock_btn = lv_btn_create(lock_screen);
-    lv_obj_set_size(unlock_btn, 160, 45);
-    lv_obj_align(unlock_btn, LV_ALIGN_BOTTOM_MID, 0, -25); // Position near bottom center
+    lv_obj_set_size(unlock_btn, 160, 40);
+    lv_obj_align(unlock_btn, LV_ALIGN_BOTTOM_MID, 0, -5); // Position near bottom center
     lv_obj_add_style(unlock_btn, &style_btn, 0); // Use existing button style
     lv_obj_add_style(unlock_btn, &style_btn_pressed, LV_STATE_PRESSED); // Use existing pressed style
     // Optionally, make button semi-transparent
