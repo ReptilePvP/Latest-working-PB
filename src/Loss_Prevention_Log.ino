@@ -676,23 +676,23 @@ void createViewLogsScreen() {
                     String entry_data = "";
                     bool parse_success = false; // Flag to track if data extraction worked
 
-                    if (third_space != -1 && third_space < log_entry->text.length() - 2) {
-                        // Find the colon after the timestamp
-                        int data_start_colon = log_entry->text.indexOf(':', third_space + 1);
-                        if (data_start_colon != -1 && data_start_colon < log_entry->text.length() - 2) {
-                             entry_data = log_entry->text.substring(data_start_colon + 2); // Get text after ": "
-                             entry_data.trim(); // Clean up whitespace
-                             if (!entry_data.isEmpty()) {
-                                 parse_success = true; // Data extracted successfully
-                             } else {
-                                 DEBUG_PRINT("Extracted log data is empty after trim");
-                                 entry_data = "(No data)"; // Provide fallback text for display if needed
-                             }
+                    // Find the *last* ": " sequence that separates timestamp from data.
+                    int data_separator_pos = log_entry->text.lastIndexOf(": ");
+
+                    if (data_separator_pos != -1) {
+                        // Extract data after the last ": "
+                        entry_data = log_entry->text.substring(data_separator_pos + 2);
+                        entry_data.trim(); // Clean up whitespace
+                        if (!entry_data.isEmpty()) {
+                            parse_success = true; // Data extracted successfully
+                            DEBUG_PRINTF("Successfully parsed log data using lastIndexOf: %s\n", entry_data.c_str());
                         } else {
-                             DEBUG_PRINT("Could not find colon after timestamp in log entry.");
+                            DEBUG_PRINT("Extracted log data is empty after trim (using lastIndexOf)");
+                            entry_data = "(No data)"; // Fallback text
                         }
                     } else {
-                        DEBUG_PRINT("Could not find third space (after AM/PM) in log entry.");
+                         DEBUG_PRINT("Could not find data separator ': ' in log entry using lastIndexOf.");
+                         // Keep parse_success = false
                     }
 
                     // --- Only create the message box if parsing was successful ---
@@ -875,7 +875,7 @@ void createViewLogsScreen() {
 
 // releaseSPIBus (unchanged)
 void releaseSPIBus() { 
-    SPI.end(); 
+    SPI.end();  
     delay(100); 
 }
 
