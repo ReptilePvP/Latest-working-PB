@@ -19,6 +19,7 @@ static void on_hour_change(lv_event_t* e);
 static void on_minute_change(lv_event_t* e);
 static void pants_type_card_event_cb(lv_event_t* e); // Added forward declaration
 static void loading_screen_event_handler(lv_event_t * e); // <-- ADDED for loading screen transition
+static void saved_network_delete_cb(lv_event_t* e_del); // <-- ADDED Forward declaration for saved network delete callback
 // Forward declarations
 void displayLogPage(lv_obj_t* list_container, int page);
 void updateStatusBar(); // Keep this one
@@ -984,7 +985,6 @@ void createGenderMenu() {
     DEBUG_PRINT("Gender Menu created.");
 }
 
-
 // Implementation from .ino lines 649-702 (createApparelTypeMenu)
 void createApparelTypeMenu() {
     DEBUG_PRINT("Creating Apparel Type Menu...");
@@ -1382,7 +1382,6 @@ static void pants_type_card_event_cb(lv_event_t* e) {
     }
 }
 
-// NOTE: This function's body was missing, adding placeholder
 void createColorMenuPants() {
     DEBUG_PRINT("Creating Pants Color Menu");
 
@@ -1565,7 +1564,7 @@ void createColorMenuPants() {
             colorMenu = nullptr;
             currentEntry += selectedPantsColors + ",";
             DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s\n", selectedPantsColors.c_str());
-            createColorMenuShoes();
+            createShoeStyleMenu();
             if (old_menu && old_menu != lv_scr_act()) {
                 lv_obj_del_async(old_menu);
             }
@@ -1578,8 +1577,6 @@ void createColorMenuPants() {
     DEBUG_PRINT("Pants color menu loaded");
 }
 
-// Implementation from .ino lines 960-1013 (createShoeStyleMenu)
-// NOTE: This function's body was missing, adding placeholder
 void createShoeStyleMenu() {
     DEBUG_PRINT("Creating Shoe Style Menu");
     selectedShoeStyle = ""; // Reset selection
@@ -1675,7 +1672,6 @@ void createShoeStyleMenu() {
     DEBUG_PRINT("Shoe Style menu loaded");
 }
 
-// NOTE: This function's body was missing, adding placeholder
 void createColorMenuShoes() {
     DEBUG_PRINT("Creating Shoes Color Menu");
 
@@ -1871,8 +1867,7 @@ void createColorMenuShoes() {
     DEBUG_PRINT("Shoes color menu loaded");
 }
 
-// Implementation from .ino lines 1070-1107 (createItemMenu)
-// NOTE: This function's body was missing, adding placeholder
+
 void createItemMenu() {
     if (itemMenu) { lv_obj_del(itemMenu); itemMenu = nullptr; }
     itemMenu = lv_obj_create(NULL); lv_obj_add_style(itemMenu, &style_screen, 0); lv_scr_load(itemMenu);
@@ -1896,8 +1891,6 @@ void createItemMenu() {
     if (lv_obj_get_content_height(list_cont) > lv_obj_get_height(list_cont)) current_scroll_obj = list_cont; else current_scroll_obj = nullptr;
 }
 
-// Implementation from .ino lines 3180-3225 (createConfirmScreen)
-// NOTE: This function's body was missing, adding placeholder
 void createConfirmScreen() {
     DEBUG_PRINT("Creating confirmation screen");
     
@@ -1977,7 +1970,6 @@ void createConfirmScreen() {
 
 // --- Settings Screens ---
 
-// Implementation from .ino lines 3688-3755 (createSoundSettingsScreen)
 void createSoundSettingsScreen() {
     DEBUG_PRINT("Entering createSoundSettingsScreen");
 
@@ -2059,7 +2051,7 @@ void createSoundSettingsScreen() {
     snprintf(volume_text, sizeof(volume_text), "%d", M5.Speaker.getVolume()); // Use current actual volume
 } // End of createSoundSettingsScreen
 
-// Implementation from .ino lines 3757-3825 (createBrightnessSettingsScreen)
+
 void createBrightnessSettingsScreen() {
     DEBUG_PRINT("Entering createBrightnessSettingsScreen");
 
@@ -2240,7 +2232,6 @@ void createBrightnessSettingsScreen() {
     DEBUG_PRINT("Finished createBrightnessSettingsScreen");
 }
 // --- Power Management Message Box Callback ---
-// Moved from inside createPowerManagementScreen to be accessible by nested lambdas
 static void power_management_msgbox_event_cb(lv_event_t* e) {
     lv_obj_t* mbox = (lv_obj_t*)lv_event_get_target(e);
     uint16_t btn_id = *(uint16_t*)lv_event_get_param(e); // v9: Get button index directly
@@ -2396,7 +2387,6 @@ void createPowerManagementScreen() {
 
 // --- WiFi UI Functions ---
 
-// Implementation from .ino lines 1109-1242
 void createWiFiManagerScreen() {
     if (wifi_manager_screen && lv_obj_is_valid(wifi_manager_screen)) { // Check validity
         lv_obj_del(wifi_manager_screen);
@@ -2510,13 +2500,85 @@ void createWiFiManagerScreen() {
         }
     }, LV_EVENT_CLICKED, NULL);
 
-    // TODO: Add list for saved networks if needed
+    // --- Saved Networks List ---
+    lv_obj_t* saved_list_label = lv_label_create(wifi_manager_screen);
+    lv_label_set_text(saved_list_label, "Saved Networks");
+    lv_obj_align_to(saved_list_label, scan_btn, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 15); // Position below scan button
+    lv_obj_add_style(saved_list_label, &style_text, 0);
+
+    lv_obj_t* saved_networks_list_widget = lv_list_create(wifi_manager_screen);
+    lv_obj_set_size(saved_networks_list_widget, SCREEN_WIDTH - 40, 100); // Adjust height as needed
+    lv_obj_align_to(saved_networks_list_widget, saved_list_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x3A3A3A), 0); // List background
+    lv_obj_set_style_pad_all(saved_networks_list_widget, 5, 0);
+
+    // Populate saved networks list
+    std::vector<NetworkInfo> savedNetworks = wifiManager.getSavedNetworks();
+    DEBUG_PRINTF("Found %d saved networks.\n", savedNetworks.size());
+
+    if (savedNetworks.empty()) {
+        lv_obj_t* empty_label = lv_label_create(saved_networks_list_widget);
+        lv_label_set_text(empty_label, "No saved networks.");
+        lv_obj_center(empty_label);
+        lv_obj_add_style(empty_label, &style_text, 0);
+    } else {
+        for (const auto& net : savedNetworks) {
+            lv_obj_t* btn = lv_list_add_btn(saved_networks_list_widget, LV_SYMBOL_SETTINGS, net.ssid.c_str()); // Use settings icon for now
+
+            // Store SSID and password (if available) in user data
+            // IMPORTANT: Need a way to manage this memory. Using strdup requires freeing later.
+            // For simplicity now, just store SSID. Password handling needed for connect.
+            char* ssid_copy = strdup(net.ssid.c_str());
+            if (ssid_copy) {
+                lv_obj_set_user_data(btn, (void*)ssid_copy);
+
+                // Add event callback for the button
+                lv_obj_add_event_cb(btn, [](lv_event_t* e) {
+                    // Corrected: Get user data from the event itself
+                    char* stored_ssid = (char*)lv_event_get_user_data(e);
+                    if (stored_ssid) {
+                        DEBUG_PRINTF("Saved network selected: %s\n", stored_ssid);
+                        // TODO: Implement action menu (Connect, Forget, Priority, Cancel)
+                        // For now, just show a temporary message box
+                        lv_obj_t* msgbox = lv_msgbox_create(NULL);
+                        lv_msgbox_add_title(msgbox, stored_ssid);
+                        lv_msgbox_add_text(msgbox, "Actions (Connect/Forget) not yet implemented.");
+                        lv_msgbox_add_footer_button(msgbox, "OK");
+                        lv_obj_center(msgbox);
+                        lv_obj_add_event_cb(msgbox, [](lv_event_t* e_msg) {
+                             // Auto-closes in v9
+                        }, LV_EVENT_VALUE_CHANGED, NULL);
+                    }
+                }, LV_EVENT_CLICKED, NULL);
+
+                // Add delete callback using the named function
+                lv_obj_add_event_cb(btn, saved_network_delete_cb, LV_EVENT_DELETE, NULL);
+
+            } else {
+                DEBUG_PRINT("Failed to allocate memory for saved network SSID copy");
+                lv_list_add_text(saved_networks_list_widget, "Error adding network"); // Add error text instead of button
+            }
+        }
+    }
+    // --- End Saved Networks List ---
 
     lv_scr_load(wifi_manager_screen);
     DEBUG_PRINT("WiFi Manager screen loaded");
 }
 
-// Implementation from .ino lines 1244-1400
+// --- Implementation of the saved network delete callback ---
+static void saved_network_delete_cb(lv_event_t* e_del) {
+    lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
+    if (target_btn) { // Check if target is valid
+        // Combine void* and char* declaration/cast
+        char* data_to_free = (char*)lv_obj_get_user_data(target_btn);
+        if (data_to_free) {
+            free(data_to_free);
+            DEBUG_PRINTF("Freed SSID user data for button via named callback.\n");
+        }
+    }
+}
+
 void createWiFiScreen() {
     if (wifi_screen && lv_obj_is_valid(wifi_screen)) { // Check validity
         lv_obj_del(wifi_screen);
@@ -2645,7 +2707,6 @@ void createWiFiScreen() {
     DEBUG_PRINT("WiFi Scan screen loaded");
 }
 
-// Implementation from .ino lines 1402-1498
 void createNetworkDetailsScreen(const String& ssid) {
     // Create the screen object
     lv_obj_t* details_screen = lv_obj_create(NULL);
@@ -2765,7 +2826,6 @@ void createNetworkDetailsScreen(const String& ssid) {
     lv_scr_load(details_screen);
 }
 
-// Implementation from .ino lines 1499-1553
 static void connect_btn_event_cb(lv_event_t* e) {
     // Cast the result of lv_event_get_target to lv_obj_t* to match lv_obj_get_user_data parameter type
     char* ssid_cstr = (char*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e));
@@ -2836,7 +2896,6 @@ static void connect_btn_event_cb(lv_event_t* e) {
     // It will be freed when the button itself is deleted via the LV_EVENT_DELETE callback.
 }
 
-// Implementation from .ino lines 1555-1588 (Forget Network - Requires Library Support)
 static void forget_btn_event_cb(lv_event_t* e) {
      // Explicitly cast target to lv_obj_t* for lv_obj_get_user_data, then cast result to char*
      char* ssid_cstr = (char*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e));
@@ -2917,7 +2976,6 @@ static void forget_btn_event_cb(lv_event_t* e) {
      // NOTE: Do NOT free ssid_cstr here. It's freed by the button's LV_EVENT_DELETE callback.
 }
 
-// Implementation from .ino lines 1590-1666
 void showWiFiKeyboard() {
     // Create a container for the keyboard and text area
     lv_obj_t* kb_container = lv_obj_create(lv_layer_top()); // Create on top layer for modal effect
@@ -3008,7 +3066,6 @@ void showWiFiKeyboard() {
 
 }
 
-// Implementation from .ino lines 1668-1729
 void showWiFiLoadingScreen(const String& ssid) {
     if (wifi_loading_screen && lv_obj_is_valid(wifi_loading_screen)) {
         lv_obj_del(wifi_loading_screen);
@@ -3049,7 +3106,6 @@ void showWiFiLoadingScreen(const String& ssid) {
     lv_scr_load(wifi_loading_screen); // Load the screen
 }
 
-// Implementation from .ino lines 1731-1784
 void updateWiFiLoadingScreen(bool success, const String& message) {
     if (!wifi_loading_screen || !lv_obj_is_valid(wifi_loading_screen)) {
         DEBUG_PRINT("WiFi loading screen is not valid for update.");
@@ -3088,7 +3144,9 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
         }
         close_timer = nullptr; // Clear static timer pointer
     }, 3000, wifi_loading_screen); // 3-second delay, pass screen as user data
+    wifi_loading_screen = nullptr; // Also clear screen pointer here
 }
+
 
 // --- Date/Time Selection Screens ---
 
@@ -3299,16 +3357,21 @@ void createDateSelectionScreen() {
     }, LV_EVENT_CLICKED, NULL);
 
     lv_scr_load(date_screen);
+    // date_screen = nullptr; // Should not clear static pointer here if it's meant to persist
 }
 
-// --- UI Update Function Implementations ---
+
 void createTimeSelectionScreen() {
-    static lv_obj_t* time_screen = nullptr;
-    if (time_screen) {
+    static lv_obj_t* time_screen = nullptr; // Keep static to manage deletion
+    if (time_screen && lv_obj_is_valid(time_screen)) { // Add validity check
         lv_obj_del(time_screen);
         time_screen = nullptr;
     }
     time_screen = lv_obj_create(NULL);
+    if (!time_screen) { // Check if creation failed
+        DEBUG_PRINT("Failed to create time selection screen!");
+        return;
+    }
     lv_obj_add_style(time_screen, &style_screen, 0);
 
     // Header
@@ -3439,9 +3502,18 @@ void createTimeSelectionScreen() {
         save_time_to_rtc();
         
         lv_timer_t* timer = lv_timer_create([](lv_timer_t* t) {
-            if (lv_scr_act()) createSettingsScreen();
-            lv_timer_del(t);
-        }, 500, NULL);
+            lv_obj_t* current_screen = (lv_obj_t*)lv_timer_get_user_data(t);
+            createSettingsScreen(); // Go back to settings
+            if (current_screen && lv_obj_is_valid(current_screen)) {
+                lv_obj_del_async(current_screen);
+                // time_screen = nullptr; // Clear static pointer
+            }
+            // No need to call lv_timer_del(t) inside the callback for one-shot timers in v8+ (check v9 behavior)
+            // It's generally safer to let LVGL handle timer deletion after it runs once if repeat_count is 1.
+            // If repeat_count is 0 (infinite), you need lv_timer_del. Let's assume it's one-shot.
+        }, 500, time_screen); // Pass screen as user data, 500ms delay
+        lv_timer_set_repeat_count(timer, 1); // Ensure it runs only once
+
     }, LV_EVENT_CLICKED, NULL);
 
     // Back button
@@ -3455,9 +3527,15 @@ void createTimeSelectionScreen() {
     lv_obj_center(back_label);
     
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        createDateSelectionScreen();
+        lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e); // Target is the button
+        lv_obj_t* current_screen = lv_obj_get_screen(btn); // Get screen from button
+        createDateSelectionScreen(); // Go back to date selection
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            // time_screen = nullptr; // Clear static pointer
+        }
     }, LV_EVENT_CLICKED, NULL);
-    
+
     lv_scr_load(time_screen);
 }
 
@@ -3545,7 +3623,6 @@ void updateStatus(const char* message, uint32_t color) {
     // by updateTimeDisplay() or updateLockScreenTime() called from the main loop.
 }
 
-
 void addTimeDisplay(lv_obj_t *screen) {
     if (!screen) return;
     // This function seems specific to the main menu's time display card.
@@ -3584,7 +3661,6 @@ void addTimeDisplay(lv_obj_t *screen) {
 
     updateTimeDisplay(); // Initial update
 }
-
 void updateTimeDisplay() {
     // Check if the label exists and is valid
     if (!time_label || !lv_obj_is_valid(time_label)) {
