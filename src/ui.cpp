@@ -1132,6 +1132,7 @@ static void shirt_color_next_btn_event_cb(lv_event_t* e) {
 
 
 void createColorMenuShirt() {
+    DEBUG_PRINT("Entering createColorMenuShirt");
     DEBUG_PRINT("Creating Shirt Color Menu...");
     if (colorMenu) {
         lv_obj_clean(colorMenu);
@@ -1140,6 +1141,7 @@ void createColorMenuShirt() {
         shirt_next_btn = nullptr; // Reset button pointer
     }
     colorMenu = lv_obj_create(NULL);
+    DEBUG_PRINTF("colorMenu created: %p\n", colorMenu);
     lv_obj_add_style(colorMenu, &style_screen, 0);
 
     // Header
@@ -1174,16 +1176,18 @@ void createColorMenuShirt() {
     lv_obj_set_layout(cont, LV_LAYOUT_GRID);
     // Adjust grid columns/rows based on number of colors and desired layout
     static lv_coord_t col_dsc[] = {70, 70, 70, 70, LV_GRID_TEMPLATE_LAST}; // 4 columns
+    DEBUG_PRINTF("NUM_COLORS: %d\n", NUM_COLORS);
     // Calculate required rows dynamically based on NUM_COLORS
     int num_rows_calc = (NUM_COLORS + 3) / 4; // +3 for integer division ceiling
     lv_coord_t* row_dsc = (lv_coord_t*)malloc(sizeof(lv_coord_t) * (num_rows_calc + 1));
+    DEBUG_PRINTF("malloc for row_dsc result: %p\n", row_dsc);
     if (row_dsc) {
         for(int i=0; i < num_rows_calc; ++i) {
             row_dsc[i] = 50; // Set row height
         }
         row_dsc[num_rows_calc] = LV_GRID_TEMPLATE_LAST;
         lv_obj_set_grid_dsc_array(cont, col_dsc, row_dsc);
-        free(row_dsc); // Free memory after setting
+ // Free memory after setting
     } else {
         // Fallback to static if malloc fails (adjust size manually if needed)
         static lv_coord_t row_dsc_static[] = {50, 50, 50, LV_GRID_TEMPLATE_LAST}; // Example for 12 colors
@@ -1202,9 +1206,11 @@ void createColorMenuShirt() {
         int col = i % 4;
 
         lv_obj_t* btn = lv_btn_create(cont);
+        DEBUG_PRINTF("  Creating button for %s: btn=%p\n", colors[i].name, btn);
         lv_obj_set_grid_cell(btn, LV_GRID_ALIGN_STRETCH, col, 1, LV_GRID_ALIGN_STRETCH, row, 1);
         lv_obj_add_flag(btn, LV_OBJ_FLAG_CHECKABLE); // Make button checkable
         lv_obj_set_style_bg_color(btn, lv_color_hex(colors[i].hexValue), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0); // Ensure opaque background
         lv_obj_set_style_border_color(btn, lv_color_hex(0xFFFFFF), LV_STATE_CHECKED); // White border when checked
         lv_obj_set_style_border_width(btn, 2, LV_STATE_CHECKED);
         lv_obj_set_style_radius(btn, 5, 0);
@@ -1245,13 +1251,11 @@ void createColorMenuShirt() {
     }
 
     // Load the screen
+    DEBUG_PRINT("Finished creating color buttons.");
     lv_scr_load(colorMenu);
     DEBUG_PRINT("Shirt Color Menu created.");
 }
 
-
-// Implementation from .ino lines 850-903 (createPantsTypeMenu)
-// NOTE: This function's body was missing in the original ui.cpp, adding a placeholder
 void createPantsTypeMenu() {
     DEBUG_PRINT("Creating Pants Type Menu");
     selectedPantsType = ""; // Reset selection
@@ -1370,6 +1374,7 @@ void createColorMenuPants() {
 
     DEBUG_PRINTF("Free heap before creation: %d bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
     colorMenu = lv_obj_create(NULL);
+    DEBUG_PRINTF("colorMenu created: %p\n", colorMenu);
     if (!colorMenu) {
         DEBUG_PRINT("Failed to create colorMenu");
         return;
@@ -1544,6 +1549,7 @@ void createColorMenuPants() {
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Next button created");
 
+    DEBUG_PRINT("Finished creating color buttons.");
     lv_scr_load(colorMenu);
     DEBUG_PRINT("Pants color menu loaded");
 }
@@ -1662,6 +1668,7 @@ void createColorMenuShoes() {
 
     DEBUG_PRINTF("Free heap before creation: %d bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
     colorMenu = lv_obj_create(NULL);
+    DEBUG_PRINTF("colorMenu created: %p\n", colorMenu);
     if (!colorMenu) {
         DEBUG_PRINT("Failed to create colorMenu");
         return;
@@ -1836,6 +1843,7 @@ void createColorMenuShoes() {
     }, LV_EVENT_CLICKED, NULL);
     DEBUG_PRINT("Next button created");
 
+    DEBUG_PRINT("Finished creating color buttons.");
     lv_scr_load(colorMenu);
     DEBUG_PRINT("Shoes color menu loaded");
 }
@@ -2250,8 +2258,6 @@ static void power_management_msgbox_event_cb(lv_event_t* e) {
     // Message box closes automatically in v9.
 }
 
-// Implementation from .ino lines 3827-3997
-// Implementation from .ino lines 3827-3997
 void createPowerManagementScreen() {
     // Use local variable for screen pointer
     lv_obj_t* power_screen = lv_obj_create(NULL);

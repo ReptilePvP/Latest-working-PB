@@ -28,32 +28,46 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 
 ### Core Components
 
-1.  **Main Application (`Loss_Prevention_Log.ino`)**
-    - Handles the overall application flow and user interface.
-    - Manages the LVGL graphics library (v9.x) for UI rendering.
-    - Implements the loss prevention logging workflow.
-    - Manages file system operations for log storage on the SD card.
-    - Initializes all hardware components and sets up the system.
-    - Processes user input from the touchscreen.
+The project follows a modular design, separating concerns into distinct C++ source (`.cpp`) and header (`.h`) files within the `src/` directory.
 
-2.  **WiFi Management (`lib/WiFiManager/`)**
-    - Custom WiFi connection management system running in a background task.
+1.  **Main Application (`src/Loss_Prevention_Log.ino`)**
+    - Handles the overall application setup (`setup()`) and main loop (`loop()`).
+    - Initializes all hardware components and software modules.
+    - Coordinates the interaction between different modules (UI, WiFi, SD Logging, Time).
+    - Contains global definitions and configurations (potentially shared via `globals.h`).
+
+2.  **UI Management (`src/ui.cpp`, `src/ui.h`)**
+    - Encapsulates all LVGL-based user interface creation and management.
+    - Defines functions for creating each screen (e.g., `createMainMenu`, `createSettingsScreen`).
+    - Handles UI event callbacks and updates the display based on application state.
+    - Manages UI styles and layouts.
+
+3.  **WiFi Handling (`src/wifi_handler.cpp`, `src/wifi_handler.h`)**
+    - Manages WiFi connectivity, including scanning, connecting, disconnecting, and saving networks.
     - Handles network scanning, connection attempts, and reconnection logic.
-    - Stores and manages saved networks (SSID/password).
-    - Provides callbacks for connection status updates to the main application.
-    - Includes visual feedback for connection attempts (loading screen).
-    - Implements a state machine for robust WiFi connection management.
+    - Likely interacts with the ESP32 WiFi library and potentially the `Preferences` library for storing credentials.
+    - Provides status updates to the main application/UI.
+    - May utilize or replace the functionality previously in `lib/WiFiManager/`.
 
-3.  **Card-Style UI Components**
+4.  **SD Card Logging (`src/sd_logger.cpp`, `src/sd_logger.h`)**
+    - Manages all interactions with the SD card.
+    - Handles initialization, file reading (log retrieval), file writing (appending logs), and file deletion/reset.
+    - Encapsulates error handling for SD card operations.
+
+5.  **Time Utilities (`src/time_utils.cpp`, `src/time_utils.h`)**
+    - Provides functions for managing time, including RTC interaction, timestamp generation, and potentially time formatting.
+    - Centralizes time-related logic used by logging and UI components.
+
+6.  **Card-Style UI Components (within `src/ui.cpp`)**
     - Modern card-based interface design for menus and information display.
     - Consistent styling across different screens.
     - Enhanced button styles with pressed state feedback.
     - Visual hierarchy using cards for content grouping.
     - Touch targets sized for usability.
 
-4.  **User Interface**
+7.  **User Interface (Managed by `src/ui.cpp`)**
     - Built with LVGL (Light and Versatile Graphics Library) (v9.x).
-    - Features multiple screens for different functions:
+    - Features multiple screens for different functions (defined in `ui.cpp`):
         - Loading Screen
         - Lock Screen (with time display)
         - Main menu (card-based)
@@ -67,20 +81,20 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
     - Visual feedback for WiFi connection attempts.
     - Status bar for messages.
 
-5.  **Data Storage**
-    - Uses SD card for log file storage.
+8.  **Data Storage (Managed by `src/sd_logger.cpp` and `Preferences`)**
+    - Uses SD card for log file storage (`/loss_prevention_log.txt`), managed by `sd_logger` module.
     - Implements file operations (append, read, reset) with error handling.
     - Stores logs in a text-based format (`/loss_prevention_log.txt`) with timestamps.
     - Uses Preferences library for storing WiFi credentials and system settings (volume, brightness, etc.).
 
-6.  **Time Management**
-    - Uses the M5Stack CoreS3's built-in RTC (Real-Time Clock).
-    - Allows manual setting of date and time via dedicated settings screens.
+9.  **Time Management (Managed by `src/time_utils.cpp`)**
+    - Uses the M5Stack CoreS3's built-in RTC (Real-Time Clock), accessed via `time_utils`.
+    - Allows manual setting of date and time via dedicated settings screens (UI calls `time_utils`).
     - System time is initialized from RTC on startup.
     - Timestamps for logs are generated based on the current RTC time.
-    *(Note: Automatic NTP synchronization is not currently implemented.)*
+    - *(Note: Automatic NTP synchronization is not currently implemented.)*
 
-7.  **Power Management**
+10. **Power Management (Logic likely within `src/ui.cpp` event handlers or `Loss_Prevention_Log.ino`)**
     - Dedicated power management screen accessible from the settings menu.
     - Three power options:
         - Power Off: Safely powers down the device using AXP2101 control (with countdown).
@@ -88,9 +102,9 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
         - Sleep Mode: Puts the device into deep sleep; wakes on touchscreen press (via AW9523 interrupt -> GPIO21).
     - Utilizes M5Stack CoreS3's power management capabilities (AXP2101).
 
-8.  **Network Connectivity**
-    - WiFi connection managed by the `WiFiManager` library.
-    - Optional webhook functionality (`sendWebhook` function) to send log entries to a remote server (e.g., Zapier) when connected.
+11. **Network Connectivity (Managed by `src/wifi_handler.cpp`)**
+    - WiFi connection managed by the `wifi_handler` module.
+    - Optional webhook functionality (`sendWebhook` function, likely called from `sd_logger.cpp` or `Loss_Prevention_Log.ino`) to send log entries to a remote server (e.g., Zapier) when connected.
     - Visual connection status feedback on relevant screens.
 
 ## Functional Workflow
@@ -168,9 +182,13 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 ## Key Files and Their Functions
 
 ### Main Application Files
-- **`src/Loss_Prevention_Log.ino`**: Main application entry point, UI screen creation, event handling, core logic.
-- **`lib/WiFiManager/WiFiManager.cpp`**: Implementation of WiFi management functionality (state machine, scanning, connection).
-- **`lib/WiFiManager/WiFiManager.h`**: Header file defining the WiFiManager class and related structures.
+- **`src/Loss_Prevention_Log.ino`**: Main application entry point (`setup()`, `loop()`), hardware initialization, module coordination.
+- **`src/globals.h`**: Defines global variables, constants, and potentially shared structures.
+- **`src/ui.cpp` / `src/ui.h`**: Manages all LVGL UI screens, elements, styles, and event handling.
+- **`src/sd_logger.cpp` / `src/sd_logger.h`**: Handles all SD card operations (logging, reading, file management).
+- **`src/wifi_handler.cpp` / `src/wifi_handler.h`**: Manages WiFi connection, scanning, and configuration persistence.
+- **`src/time_utils.cpp` / `src/time_utils.h`**: Provides time-related functions (RTC access, timestamping).
+- **`lib/WiFiManager/`**: (Potentially legacy or internal utility) Contains a custom WiFi management library. Its current role might be superseded or utilized internally by `src/wifi_handler.*`.
 
 ### Configuration Files
 - **`platformio.ini`**: Project build configuration, library dependencies.
@@ -179,7 +197,6 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 ### Documentation Files
 - **`README.md`**: Top-level overview and quick-start documentation.
 - **`src/PROJECT_DOCUMENTATION.md`**: This detailed technical documentation.
-- **`src/Back button.md`**: Code snippet example for creating a back button.
 
 ### Data Files (Runtime)
 - **`/loss_prevention_log.txt`**: Main log file stored on the SD card.
@@ -190,45 +207,30 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 ## Important Functions (Illustrative List)
 
 ### UI Management
-- `createLoadingScreen()`, `createLockScreen()`, `createMainMenu()`
-- `createGenderMenu()`, `createColorMenuShirt()`, `createColorMenuPants()`, `createColorMenuShoes()`, `createItemMenu()`
-- `createConfirmScreen()`, `createViewLogsScreen()`
-- `createSettingsScreen()`, `createWiFiManagerScreen()`, `createNetworkDetailsScreen()`, `createWiFiScreen()`
-- `createSoundSettingsScreen()`, `createBrightnessSettingsScreen()`, `createPowerManagementScreen()`
-- `createDateSelectionScreen()`, `createTimeSelectionScreen()`
-- `showWiFiLoadingScreen()`, `updateWiFiLoadingScreen()`
-- `addStatusBar()`, `updateStatus()`
+- Functions within `src/ui.cpp` like: `createLoadingScreen()`, `createLockScreen()`, `createMainMenu()`, `createGenderMenu()`, `createColorMenuShirt()`, `createColorMenuPants()`, `createColorMenuShoes()`, `createItemMenu()`, `createConfirmScreen()`, `createViewLogsScreen()`, `createSettingsScreen()`, `createWiFiManagerScreen()`, `createNetworkDetailsScreen()`, `createWiFiScreen()`, `createSoundSettingsScreen()`, `createBrightnessSettingsScreen()`, `createPowerManagementScreen()`, `createDateSelectionScreen()`, `createTimeSelectionScreen()`, `showWiFiLoadingScreen()`, `updateWiFiLoadingScreen()`, `addStatusBar()`, `updateStatus()`.
+- Event handlers (e.g., `button_event_cb`) defined within `src/ui.cpp`.
 
-### WiFi Management (via `wifiManager` object)
-- `wifiManager.begin()`: Initializes the WiFi manager.
-- `wifiManager.update()`: Processes WiFi events (called in `loop()`).
-- `wifiManager.startScan()`: Initiates a WiFi network scan.
-- `wifiManager.connect()`: Attempts to connect to a specified network.
-- `wifiManager.disconnect()`: Disconnects from the current network.
-- `wifiManager.addNetwork()`: Saves a new network credential.
-- `wifiManager.removeNetwork()`: Forgets a saved network.
-- `wifiManager.getSavedNetworks()`: Retrieves the list of saved networks.
-- `onWiFiStatus()`: Callback function to handle status updates from WiFiManager.
-- `onWiFiScanComplete()`: Callback function to handle scan results from WiFiManager.
+### WiFi Handling (Functions within `src/wifi_handler.cpp`)
+- Functions like `wifi_init()`, `wifi_start_scan()`, `wifi_connect()`, `wifi_disconnect()`, `wifi_add_network()`, `wifi_remove_network()`, `wifi_get_saved_networks()`, `wifi_get_status()`.
+- Callback functions (e.g., `onWiFiStatus`, `onWiFiScanComplete`) might be registered from `Loss_Prevention_Log.ino` or `ui.cpp` to receive updates.
 
-### Data Management
-- `appendToLog()`: Appends a new entry to the log file on the SD card.
-- `getFormattedEntry()`: Formats the raw log data for display.
-- `getTimestamp()`: Gets the current timestamp from RTC for log entries.
-- `listSavedEntries()`: Reads and parses log entries from the SD card (used by `createViewLogsScreen`).
-- `saveEntry()`: Coordinates saving the entry locally and potentially sending the webhook.
-- `sendWebhook()`: Sends entry data to the configured remote server URL.
-- `parseTimestamp()`: Parses timestamp from a log entry string.
+### SD Card Logging (Functions within `src/sd_logger.cpp`)
+- Functions like `sd_init()`, `sd_append_log()`, `sd_read_logs()`, `sd_reset_log()`, `sd_get_formatted_entry()`.
+- `saveEntry()`: Might be a coordinating function in `Loss_Prevention_Log.ino` or `sd_logger.cpp` that calls `sd_append_log` and potentially `sendWebhook`.
+- `sendWebhook()`: Function to send entry data to the configured remote server URL (could reside here or in `wifi_handler.cpp` or `Loss_Prevention_Log.ino`).
+
+### Time Utilities (Functions within `src/time_utils.cpp`)
+- Functions like `time_init_rtc()`, `time_set_from_rtc()`, `time_get_timestamp_str()`, `time_set_datetime()`, `time_parse_timestamp()`.
 
 ### System Functions
 - `setup()`: Arduino setup function, initializes hardware and software components.
 - `loop()`: Arduino main loop, handles M5Stack updates and LVGL tasks.
-- `initFileSystem()`: Initializes the SD card file system.
-- `initStyles()`: Initializes custom LVGL styles.
-- `setSystemTimeFromRTC()`: Sets the ESP32 system time based on the M5Stack RTC.
+- `initFileSystem()`: Likely called within `sd_init()` in `src/sd_logger.cpp`.
+- `initStyles()`: Initializes custom LVGL styles, likely called from `src/ui.cpp`.
+- `setSystemTimeFromRTC()`: Likely called within `time_init_rtc()` or similar in `src/time_utils.cpp`.
 - Power management functions within `createPowerManagementScreen` event handlers (interact with M5.Power, AXP2101, ESP-IDF sleep functions).
 - Brightness/Volume functions within settings screens (interact with M5.Display, M5.Speaker, Preferences).
-- `DEBUG_PRINT()`, `DEBUG_PRINTF()`: Debug logging macros.
+- `DEBUG_PRINT()`, `DEBUG_PRINTF()`: Debug logging macros (potentially defined in `globals.h`).
 
 ### Touch and Input Handling
 - LVGL's internal touch handling uses `m5gfx_lvgl` driver which interfaces with the touch controller.
@@ -290,12 +292,12 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 1.  **WiFi Connection Problems**
     - **Problem**: Unable to connect to WiFi networks.
     - **Solution**: Check credentials, signal strength, ensure network is 2.4GHz. Use WiFi Manager screen to forget/re-add network. Check serial monitor for `WiFiManager` debug messages.
-    - **Technical**: Managed by `WiFiManager` state machine. Failures often logged to Serial.
+    - **Technical**: Managed by `src/wifi_handler.cpp`. Failures often logged to Serial via `DEBUG_PRINT`. Check state logic within this module.
 
 2.  **SD Card Issues**
     - **Problem**: "SD card initialization failed" or unable to save/read logs.
     - **Solution**: Ensure card is inserted correctly, formatted as FAT32. Try a different card. Check serial monitor for `initFileSystem` errors. Ensure `SPI_SD` pins are correct.
-    - **Technical**: Uses dedicated SPI bus (`SPI_SD`). `initFileSystem` attempts initialization multiple times. Errors logged to Serial. Log file is `/loss_prevention_log.txt`.
+    - **Technical**: Uses dedicated SPI bus (`SPI_SD`). `sd_init()` in `src/sd_logger.cpp` attempts initialization. Errors logged to Serial. Log file is `/loss_prevention_log.txt`.
 
 3.  **Touchscreen Unresponsive or Inaccurate**
     - **Problem**: Touch input not detected or misaligned.
@@ -309,13 +311,13 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 
 5.  **Time Incorrect**
     - **Problem**: Displayed time is wrong or doesn't update.
-    - **Solution**: Use Settings -> Date & Time to set the correct time manually. Ensure RTC battery is functional (if time resets after power loss).
-    - **Technical**: Relies on the M5Stack's RTC. `setSystemTimeFromRTC` updates ESP32 time from RTC.
+    - **Solution**: Use Settings -> Date & Time to set the correct time manually (calls functions in `src/time_utils.cpp`). Ensure RTC battery is functional (if time resets after power loss).
+    - **Technical**: Relies on the M5Stack's RTC, accessed via `src/time_utils.cpp`. `time_set_from_rtc()` updates ESP32 time.
 
 6.  **Power Management Problems**
     - **Problem**: Device doesn't power off, restart, or sleep/wake correctly.
-    - **Solution**: Check serial logs during power operations. Ensure AXP2101/AW9523 are communicating (no I2C errors). Verify GPIO21 is configured for wake-up.
-    - **Technical**: Power off uses AXP2101 registers. Restart uses `ESP.restart()`. Sleep uses `esp_deep_sleep_start` with EXT0 wake-up on GPIO21 triggered by AW9523.
+    - **Solution**: Check serial logs during power operations. Ensure AXP2101/AW9523 are communicating (no I2C errors). Verify GPIO21 is configured for wake-up. Check event handlers in `src/ui.cpp` for the power screen.
+    - **Technical**: Power off uses AXP2101 registers. Restart uses `ESP.restart()`. Sleep uses `esp_deep_sleep_start` with EXT0 wake-up on GPIO21 triggered by AW9523. Logic initiated from UI event handlers.
 
 7.  **Log File Corruption**
     - **Problem**: Log file (`/loss_prevention_log.txt`) is unreadable or contains garbage data.

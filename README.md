@@ -40,6 +40,7 @@ Detailed technical documentation is available in:
 
 ## Development
 This project is developed using PlatformIO with the Arduino framework for ESP32.
+The codebase is structured modularly, with distinct functionalities separated into different source files (e.g., UI, SD logging, WiFi handling) located in the `src/` directory for better organization and maintainability.
 
 ## Dependencies
 Key libraries used (see `platformio.ini` for specific versions):

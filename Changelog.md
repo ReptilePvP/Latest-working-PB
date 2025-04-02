@@ -2,6 +2,16 @@
 
 All notable changes to the Loss Prevention Log project will be documented in this file.
 
+## [Unreleased] - 2025-04-02
+### Changed
+- Refactored codebase into a modular structure for improved organization and maintainability:
+  - Separated UI logic into `src/ui.cpp` / `src/ui.h`.
+  - Separated SD card logging logic into `src/sd_logger.cpp` / `src/sd_logger.h`.
+  - Separated WiFi handling logic into `src/wifi_handler.cpp` / `src/wifi_handler.h`.
+  - Separated time utility functions into `src/time_utils.cpp` / `src/time_utils.h`.
+  - Introduced `src/globals.h` for shared definitions.
+  - Main application logic (`.ino`) now focuses on initialization and coordination between modules.
+
 ## [1.0.0] - 2025-03-18
 ### Initial Release
 
