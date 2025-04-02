@@ -18,6 +18,7 @@ static void on_day_change(lv_event_t* e);
 static void on_hour_change(lv_event_t* e);
 static void on_minute_change(lv_event_t* e);
 static void pants_type_card_event_cb(lv_event_t* e); // Added forward declaration
+static void loading_screen_event_handler(lv_event_t * e); // <-- ADDED for loading screen transition
 // Forward declarations
 void displayLogPage(lv_obj_t* list_container, int page);
 void updateStatusBar(); // Keep this one
@@ -40,6 +41,7 @@ lv_style_t style_keyboard_btn;
 lv_style_t style_network;
 lv_style_t style_network_pressed; // Added for consistency
 lv_style_t style_card; // Used for gender/type cards
+lv_style_t style_color_btn_checked; // Style for selected color buttons
 
 // --- Global Variables (Defined here, declared extern in globals.h) ---
 // Entry State
@@ -353,7 +355,32 @@ void createLoadingScreen() {
     // Store the timer in the screen's user data so we can access it later
     // lv_obj_set_user_data(loading_screen, timer); // Not strictly needed if timer deletes itself
 
+    // Add event callback to handle completion
+    lv_obj_add_event_cb(loading_screen, loading_screen_event_handler, LV_EVENT_READY, NULL); // <-- ADDED
+
     DEBUG_PRINT("Loading screen created");
+}
+
+// Event handler for the loading screen
+static void loading_screen_event_handler(lv_event_t * e) { // <-- ADDED
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * screen = (lv_obj_t*)lv_event_get_target(e); // Get the screen object that received the event
+
+    if (code == LV_EVENT_READY) {
+        DEBUG_PRINT("Loading screen received LV_EVENT_READY. Transitioning...");
+
+        // The semaphore is already held by lvgl_task when this event handler runs.
+        // No need to take/give semaphore here.
+
+        lv_obj_t* old_screen = screen; // The target of the event IS the loading screen
+        createLockScreen();            // Create and load the lock screen
+
+        if (old_screen && old_screen != lv_scr_act() && lv_obj_is_valid(old_screen)) {
+            // Use lv_obj_del_async for potentially safer deletion
+            lv_obj_del_async(old_screen);
+            DEBUG_PRINT("Old loading screen marked for deletion.");
+        }
+    }
 }
 
 // Update the loading progress bar
@@ -371,20 +398,20 @@ void updateLoadingProgress(lv_timer_t* timer) {
     lv_bar_set_value(bar, value, LV_ANIM_ON);
 
     if (value >= 100) { // Check against the bar's maximum value (100)
+        // --- MODIFIED BLOCK START ---
+        DEBUG_PRINT("Loading complete. Deleting timer and sending event.");
         lv_timer_del(timer); // Delete the timer
 
-        // Take the GUI semaphore to ensure exclusive access
-        if (xSemaphoreTake(xGuiSemaphore, pdMS_TO_TICKS(500)) == pdTRUE) {
-            lv_obj_t* old_screen = lv_scr_act(); // Store reference to loading screen
-            createLockScreen();                  // Create and load the lock screen
-            if (old_screen && old_screen != lv_scr_act() && lv_obj_is_valid(old_screen)) {
-                // Use lv_obj_del_async for potentially safer deletion from a timer callback context
-                lv_obj_del_async(old_screen);
-            }
-            xSemaphoreGive(xGuiSemaphore);       // Release semaphore
+        // Send an event to the loading screen itself to trigger the transition
+        // The event handler (loading_screen_event_handler) will run safely within the lv_timer_handler context
+        // Ensure we get the screen object correctly before sending the event
+        lv_obj_t* screen = lv_obj_get_screen(bar);
+        if (screen && lv_obj_is_valid(screen)) {
+             lv_obj_send_event(screen, LV_EVENT_READY, NULL); // Use lv_obj_send_event which has the correct signature
         } else {
-            DEBUG_PRINT("Failed to take xGuiSemaphore in updateLoadingProgress");
+             DEBUG_PRINT("Error: Could not get valid screen object from progress bar to send event.");
         }
+        // --- MODIFIED BLOCK END ---
     }
 }
 
@@ -479,7 +506,6 @@ void createMainMenu() {
     }, LV_EVENT_CLICKED, NULL);
 
     // Card 3: Settings (Row 1, Col 0)
-    // Card 3: Settings (Row 1, Col 0)
     lv_obj_t* settings_card = lv_obj_create(grid);
     lv_obj_set_grid_cell(settings_card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
     lv_obj_add_style(settings_card, &style_card_action, 0);
@@ -504,11 +530,11 @@ void createMainMenu() {
     lv_label_set_text(wifi_icon, LV_SYMBOL_WIFI); // WiFi icon
     lv_obj_set_style_text_font(wifi_icon, &lv_font_montserrat_20, 0);
     lv_obj_align(wifi_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* wifi_card_label = lv_label_create(wifi_card); // Renamed to avoid conflict
-    lv_label_set_text(wifi_card_label, "WiFi");
-    lv_obj_align(wifi_card_label, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_t* wifi_label_card = lv_label_create(wifi_card); // Renamed to avoid conflict with global wifi_label
+    lv_label_set_text(wifi_label_card, "WiFi");
+    lv_obj_align(wifi_label_card, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(wifi_card, [](lv_event_t* e) {
-        createWiFiManagerScreen(); // Or createWiFiScreen() depending on desired flow
+        createWiFiManagerScreen(); // Call the WiFi Manager screen function
     }, LV_EVENT_CLICKED, NULL);
 
     // Card 5: Date/Time (Row 2, Col 0)
@@ -517,14 +543,14 @@ void createMainMenu() {
     lv_obj_add_style(datetime_card, &style_card_action, 0);
     lv_obj_add_style(datetime_card, &style_card_pressed, LV_STATE_PRESSED);
     lv_obj_t* datetime_icon = lv_label_create(datetime_card);
-    lv_label_set_text(datetime_icon, LV_SYMBOL_BELL); // Using Bell as placeholder, consider Calendar icon
+    lv_label_set_text(datetime_icon, LV_SYMBOL_SETTINGS); // Placeholder: Calendar icon (LV_SYMBOL_CALENDAR undefined)
     lv_obj_set_style_text_font(datetime_icon, &lv_font_montserrat_20, 0);
     lv_obj_align(datetime_icon, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_t* datetime_label = lv_label_create(datetime_card);
     lv_label_set_text(datetime_label, "Date/Time");
     lv_obj_align(datetime_label, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(datetime_card, [](lv_event_t* e) {
-        createDateSelectionScreen();
+        createDateSelectionScreen(); // Call the date selection screen function
     }, LV_EVENT_CLICKED, NULL);
 
     // Card 6: Lock (Row 2, Col 1)
@@ -570,8 +596,7 @@ static void reset_confirm_event_cb(lv_event_t* e) {
     // No need to manually close the msgbox in v9 for footer buttons, it closes automatically.
     // lv_msgbox_close(mbox); // Removed
 }
-
-// Implementation from .ino lines 400-440 (createSettingsScreen)
+    
 void createSettingsScreen() {
     DEBUG_PRINT("Creating Settings Screen...");
     if (settingsScreen) {
@@ -698,7 +723,8 @@ void createSettingsScreen() {
         lv_msgbox_add_footer_button(msgbox, "Reset");  // ID 1
         lv_obj_center(msgbox);
         // Add event callback to the message box itself
-        lv_obj_add_event_cb(msgbox, reset_confirm_event_cb, LV_EVENT_VALUE_CHANGED, NULL); // Event triggers when button clicked
+        // Try LV_EVENT_CLICKED instead of LV_EVENT_VALUE_CHANGED to see if it resolves linter issue
+        lv_obj_add_event_cb(msgbox, (lv_event_cb_t)reset_confirm_event_cb, LV_EVENT_CLICKED, NULL);
     }, LV_EVENT_CLICKED, NULL);
 
 
@@ -707,8 +733,6 @@ void createSettingsScreen() {
     DEBUG_PRINT("Settings Screen created.");
 }
 
-
-// Implementation from .ino lines 442-574 (createViewLogsScreen)
 void createViewLogsScreen() {
     DEBUG_PRINT("Creating View Logs Screen...");
     if (view_logs_screen) {
@@ -874,8 +898,6 @@ void displayLogPage(lv_obj_t* list_container, int page) {
     }
 }
 
-
-// Implementation from .ino lines 576-647 (createGenderMenu)
 void createGenderMenu() {
     DEBUG_PRINT("Creating Gender Menu...");
     if (genderMenu) {
@@ -1056,8 +1078,6 @@ void createApparelTypeMenu() {
     DEBUG_PRINT("Apparel Type Menu created.");
 }
 
-
-// Implementation from .ino lines 704-848 (createColorMenuShirt)
 // Helper struct for color info
 struct ColorInfo {
     const char* name;
@@ -1158,7 +1178,7 @@ void createColorMenuShirt() {
     // Back Button
     lv_obj_t* back_btn = lv_btn_create(header);
     lv_obj_set_size(back_btn, 40, 30);
-    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 5, 0);
+    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 2, 0);
     lv_obj_add_style(back_btn, &style_btn, 0);
     lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* back_label = lv_label_create(back_btn);
@@ -1196,7 +1216,7 @@ void createColorMenuShirt() {
     }
 
     lv_obj_set_style_pad_column(cont, 5, 0);
-    lv_obj_set_style_pad_row(cont, 5, 0);
+    lv_obj_set_style_pad_row(cont, 15, 0); // Increased spacing
     lv_obj_add_flag(cont, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_AUTO);
 
@@ -1211,15 +1231,21 @@ void createColorMenuShirt() {
         lv_obj_add_flag(btn, LV_OBJ_FLAG_CHECKABLE); // Make button checkable
         lv_obj_set_style_bg_color(btn, lv_color_hex(colors[i].hexValue), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0); // Ensure opaque background
-        lv_obj_set_style_border_color(btn, lv_color_hex(0xFFFFFF), LV_STATE_CHECKED); // White border when checked
-        lv_obj_set_style_border_width(btn, 2, LV_STATE_CHECKED);
+        lv_obj_set_style_border_color(btn, lv_color_hex(0xFFFF00), LV_STATE_CHECKED); // Yellow border when checked
+        lv_obj_set_style_border_width(btn, 3, LV_STATE_CHECKED); // Increased border width
+        lv_obj_set_style_bg_color(btn, lv_color_hex(colors[i].hexValue), LV_STATE_CHECKED); // Explicitly
         lv_obj_set_style_radius(btn, 5, 0);
 
-        // Add label (optional, maybe only show on hover/press?)
-        // lv_obj_t* label = lv_label_create(btn);
-        // lv_label_set_text(label, colors[i].name);
-        // lv_obj_center(label);
-        // lv_obj_set_style_text_color(label, lv_color_is_light(lv_color_hex(colors[i].hexValue)) ? lv_color_black() : lv_color_white(), 0);
+        //Add label (optional, maybe only show on hover/press?)
+        lv_obj_t* label = lv_label_create(btn);
+        lv_label_set_text(label, colors[i].name);
+        lv_obj_center(label);
+        // Calculate if color is light based on perceived brightness
+        uint8_t r = (colors[i].hexValue >> 16) & 0xFF;
+        uint8_t g = (colors[i].hexValue >> 8) & 0xFF;
+        uint8_t b = colors[i].hexValue & 0xFF;
+        uint16_t brightness = (299 * r + 587 * g + 114 * b) / 1000;
+        lv_obj_set_style_text_color(label, brightness > 127 ? lv_color_black() : lv_color_white(), 0);
 
         // Add event callback
         lv_obj_add_event_cb(btn, color_btn_event_cb, LV_EVENT_CLICKED, (void*)colors[i].name);
@@ -1356,8 +1382,6 @@ static void pants_type_card_event_cb(lv_event_t* e) {
     }
 }
 
-
-// Implementation from .ino lines 905-958 (createColorMenuPants)
 // NOTE: This function's body was missing, adding placeholder
 void createColorMenuPants() {
     DEBUG_PRINT("Creating Pants Color Menu");
@@ -1651,7 +1675,6 @@ void createShoeStyleMenu() {
     DEBUG_PRINT("Shoe Style menu loaded");
 }
 
-// Implementation from .ino lines 1015-1068 (createColorMenuShoes)
 // NOTE: This function's body was missing, adding placeholder
 void createColorMenuShoes() {
     DEBUG_PRINT("Creating Shoes Color Menu");

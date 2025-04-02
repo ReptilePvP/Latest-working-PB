@@ -132,7 +132,7 @@ void loop() {
 
     // LVGL Timer Handler - Needs to run frequently in the main loop
     // Semaphore protection is handled within lvgl_task now.
-    lv_timer_handler();
+    // lv_timer_handler(); // Removed: Handled by lvgl_task
 
     // --- Time Update Section ---
     // Periodically update time displays on relevant screens
