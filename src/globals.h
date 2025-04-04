@@ -16,10 +16,58 @@
 #include <vector>           // Ensure vector is included for NetworkInfo
 #include <algorithm>        // For std::sort
 
+#include <stdarg.h> // For va_list, vsnprintf
+#include <stdio.h>  // For vsnprintf
+#include <stdlib.h> // For malloc, free
+
+// Helper function for DEBUG_PRINTF to handle formatting safely
+static inline void _debug_printf_helper(const char *format, ...) {
+    char loc_buf[128]; // Increased buffer size slightly
+    char * temp = loc_buf;
+    va_list arg;
+    va_list copy;
+    va_start(arg, format);
+    va_copy(copy, arg);
+    // Determine required buffer size
+    int len = vsnprintf(NULL, 0, format, copy);
+    va_end(copy);
+
+    if(len < 0) { // Error in format string
+        va_end(arg);
+        return;
+    };
+
+    // Allocate buffer if needed
+    if(len >= sizeof(loc_buf)){
+        temp = (char*) malloc(len + 1);
+        if(temp == NULL) { // Allocation failed
+            va_end(arg);
+            // Optionally print an error message to Serial directly
+            // Serial.println("Error: malloc failed in _debug_printf_helper");
+            return;
+        }
+    }
+
+    // Format the string into the buffer
+    vsnprintf(temp, len + 1, format, arg);
+    va_end(arg);
+
+    // Print the formatted string
+    Serial.print(millis());
+    Serial.print(": ");
+    Serial.print(temp);
+
+    // Free allocated buffer if necessary
+    if(temp != loc_buf){
+        free(temp);
+    }
+}
+
+
 // --- Debug ---
 #define DEBUG_ENABLED true
 #define DEBUG_PRINT(x) if(DEBUG_ENABLED) { Serial.print(millis()); Serial.print(": "); Serial.println(x); }
-#define DEBUG_PRINTF(x, ...) if(DEBUG_ENABLED) { Serial.print(millis()); Serial.print(": "); Serial.printf(x, ##__VA_ARGS__); }
+#define DEBUG_PRINTF(format, ...) do { if (DEBUG_ENABLED) _debug_printf_helper(format, __VA_ARGS__); } while(0)
 #define DEBUG_PRINTLN(x) if(DEBUG_ENABLED) { Serial.print(millis()); Serial.print(": "); Serial.println(x); } // Added LN version
 
 // --- Pins & Hardware ---
@@ -71,6 +119,13 @@ struct WifiNetwork {
     char ssid[33];
     char password[65];
     bool connected = false; // Added for WiFiManager integration
+};
+
+
+// Color definition used across UI elements
+struct ColorInfo {
+    const char* name;
+    uint32_t hexValue; // Assuming you store the color value too
 };
 
 struct LogEntry {

@@ -20,6 +20,8 @@ static void on_minute_change(lv_event_t* e);
 static void pants_type_card_event_cb(lv_event_t* e); // Added forward declaration
 static void loading_screen_event_handler(lv_event_t * e); // <-- ADDED for loading screen transition
 static void saved_network_delete_cb(lv_event_t* e_del); // <-- ADDED Forward declaration for saved network delete callback
+static void saved_network_item_click_cb(lv_event_t* e); // <-- ADDED Forward declaration for saved network item click
+
 // Forward declarations
 void displayLogPage(lv_obj_t* list_container, int page);
 void updateStatusBar(); // Keep this one
@@ -34,7 +36,6 @@ void updateStatusBar(); // Keep this one
 // --- Style Definitions ---
 lv_style_t style_screen, style_btn, style_btn_pressed, style_title, style_text;
 lv_style_t style_card_action, style_card_info, style_card_pressed;
-// Note: style_card_pressed is defined twice in the original .ino (lines 67 and 3227)
 // We'll use the second definition from initStyles (lines 3227-3232) as it seems more complete for card interactions.
 // lv_style_t style_gender_card, style_gender_card_pressed; // These seem unused, replaced by style_card/style_card_pressed
 // lv_style_t style_network_item, style_network_item_pressed; // Replaced by style_network/style_network_pressed
@@ -66,7 +67,7 @@ int selected_hour = 0, selected_minute = 0, selected_is_pm = 0; // 0 = AM, 1 = P
 // WiFi State (selected_ssid/password are defined in globals.h as extern char arrays)
 char selected_ssid[33] = "";
 char selected_password[65] = "";
-bool manualDisconnect = false;
+bool manualDisconnect = true;
 
 // Settings State (displayBrightness/wifiEnabled defined in globals.h as extern)
 uint8_t displayBrightness = 128;
@@ -500,7 +501,7 @@ void createMainMenu() {
     lv_obj_set_style_text_font(logs_icon, &lv_font_montserrat_20, 0);
     lv_obj_align(logs_icon, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_t* logs_label = lv_label_create(logs_card);
-    lv_label_set_text(logs_label, "Logs");
+    lv_label_set_text(logs_label, "View Logs");
     lv_obj_align(logs_label, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(logs_card, [](lv_event_t* e) {
         createViewLogsScreen();
@@ -519,7 +520,7 @@ void createMainMenu() {
     lv_label_set_text(settings_label, "Settings");
     lv_obj_align(settings_label, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(settings_card, [](lv_event_t* e) {
-        createSettingsScreen(); // Call the correct function
+        createSettingsScreen();
     }, LV_EVENT_CLICKED, NULL);
 
     // Card 4: WiFi (Row 1, Col 1)
@@ -535,7 +536,7 @@ void createMainMenu() {
     lv_label_set_text(wifi_label_card, "WiFi");
     lv_obj_align(wifi_label_card, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(wifi_card, [](lv_event_t* e) {
-        createWiFiManagerScreen(); // Call the WiFi Manager screen function
+        createWiFiManagerScreen();
     }, LV_EVENT_CLICKED, NULL);
 
     // Card 5: Date/Time (Row 2, Col 0)
@@ -544,320 +545,588 @@ void createMainMenu() {
     lv_obj_add_style(datetime_card, &style_card_action, 0);
     lv_obj_add_style(datetime_card, &style_card_pressed, LV_STATE_PRESSED);
     lv_obj_t* datetime_icon = lv_label_create(datetime_card);
-    lv_label_set_text(datetime_icon, LV_SYMBOL_SETTINGS); // Placeholder: Calendar icon (LV_SYMBOL_CALENDAR undefined)
+    lv_label_set_text(datetime_icon, LV_SYMBOL_IMAGE); // Calendar icon
     lv_obj_set_style_text_font(datetime_icon, &lv_font_montserrat_20, 0);
     lv_obj_align(datetime_icon, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_t* datetime_label = lv_label_create(datetime_card);
     lv_label_set_text(datetime_label, "Date/Time");
     lv_obj_align(datetime_label, LV_ALIGN_BOTTOM_MID, 0, -8);
     lv_obj_add_event_cb(datetime_card, [](lv_event_t* e) {
-        createDateSelectionScreen(); // Call the date selection screen function
+        createDateSelectionScreen();
     }, LV_EVENT_CLICKED, NULL);
 
-    // Card 6: Lock (Row 2, Col 1)
-    lv_obj_t* lock_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(lock_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
-    lv_obj_add_style(lock_card, &style_card_action, 0);
-    lv_obj_add_style(lock_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* lock_icon = lv_label_create(lock_card);
-    lv_label_set_text(lock_icon, ""); // Lock icon (UTF-8 symbol for v9)
-    lv_obj_set_style_text_font(lock_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(lock_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* lock_label = lv_label_create(lock_card);
-    lv_label_set_text(lock_label, "Lock");
-    lv_obj_align(lock_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(lock_card, [](lv_event_t* e) {
-        createLockScreen(); // Go back to lock screen
+    // Card 6: Reset (Row 2, Col 1)
+    lv_obj_t* reset_card = lv_obj_create(grid);
+    lv_obj_set_grid_cell(reset_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
+    lv_obj_add_style(reset_card, &style_card_action, 0);
+    lv_obj_add_style(reset_card, &style_card_pressed, LV_STATE_PRESSED);
+    lv_obj_t* reset_icon = lv_label_create(reset_card);
+    lv_label_set_text(reset_icon, LV_SYMBOL_WARNING); // Warning icon
+    lv_obj_set_style_text_font(reset_icon, &lv_font_montserrat_20, 0);
+    lv_obj_align(reset_icon, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_t* reset_label = lv_label_create(reset_card);
+    lv_label_set_text(reset_label, "Reset");
+    lv_obj_align(reset_label, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_add_event_cb(reset_card, [](lv_event_t* e) {
+        // Create confirmation message box
+        lv_obj_t* msgbox = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(msgbox, "Confirm Reset");
+        lv_msgbox_add_text(msgbox, "Are you sure you want to reset all settings and logs?");
+        // v9: Add footer buttons
+        lv_msgbox_add_footer_button(msgbox, "Cancel"); // ID 0
+        lv_msgbox_add_footer_button(msgbox, "Reset");  // ID 1
+        lv_obj_center(msgbox);
+        lv_obj_add_event_cb(msgbox, reset_confirm_event_cb, LV_EVENT_VALUE_CHANGED, NULL); // Use named callback
     }, LV_EVENT_CLICKED, NULL);
 
-
-    // Add Status Bar and Time Display
+    // Add Status Bar
     addStatusBar(main_menu_screen);
+    updateStatusBar(); // Initial update
+
+    // Add Time Display
     addTimeDisplay(main_menu_screen);
+    updateTimeDisplay(); // Initial update
 
     // Load the screen
     lv_scr_load(main_menu_screen);
+    DEBUG_PRINT("Main menu screen loaded");
     DEBUG_PRINTF("Free heap after main menu: %d bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
 }
 
-// Event handler for the reset confirmation message box
+// Callback for reset confirmation message box
 static void reset_confirm_event_cb(lv_event_t* e) {
-    lv_obj_t* mbox = (lv_obj_t*)lv_event_get_target(e); // Get the object that dispatched the event
-    uint16_t btn_id = *(uint16_t*)lv_event_get_param(e); // v9: Get button index from event parameter
+    lv_obj_t* msgbox = (lv_obj_t*)lv_event_get_current_target(e); // Get the message box object
+    uint16_t btn_id = *(uint16_t*)lv_event_get_param(e); // Get button index
 
-    // In v9, the event is triggered *before* the msgbox closes automatically on button press.
-    // We just need to check which button was pressed.
-    // Button IDs are 0 for "Cancel", 1 for "Reset" based on creation order.
+    if (btn_id == 1) { // "Reset" button clicked
+        DEBUG_PRINT("Reset confirmed. Performing factory reset...");
+        // TODO: Implement actual factory reset logic
+        // - Clear Preferences
+        // - Delete log file
+        // - Reset WiFi credentials
+        // - Potentially restart the device
 
-    if (btn_id == 1) { // Check if the "Reset" button (ID 1) was pressed
-        DEBUG_PRINTLN("Resetting device...");
-            // Perform the reset
+        // Example: Clear preferences
+        Preferences prefs;
+        prefs.begin("settings", false);
+        prefs.clear();
+        prefs.end();
+        DEBUG_PRINT("Preferences cleared.");
+
+        // Example: Delete log file (ensure SD card is initialized)
+        if (SD.exists(LOG_FILENAME)) {
+            if (SD.remove(LOG_FILENAME)) {
+                DEBUG_PRINT("Log file deleted.");
+            } else {
+                DEBUG_PRINT("Error deleting log file.");
+            }
+        }
+        // Show a confirmation message
+        lv_obj_t* confirm_msg = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(confirm_msg, "Reset Complete");
+        lv_msgbox_add_text(confirm_msg, "Device has been reset. Restarting...");
+        lv_msgbox_add_footer_button(confirm_msg, "OK");
+        lv_obj_center(confirm_msg);
+        lv_obj_add_event_cb(confirm_msg, [](lv_event_t* e_ok) {
+            DEBUG_PRINT("Restarting device after reset confirmation.");
             ESP.restart();
+        }, LV_EVENT_VALUE_CHANGED, NULL);
+
+    } else { // "Cancel" button clicked or message box closed
+        DEBUG_PRINT("Reset cancelled.");
     }
-    // No need to manually close the msgbox in v9 for footer buttons, it closes automatically.
-    // lv_msgbox_close(mbox); // Removed
+
+    // Message box closes automatically in v9 when a button is clicked
+    // No need for lv_msgbox_close(msgbox);
 }
-    
+
+
 void createSettingsScreen() {
-    DEBUG_PRINT("Creating Settings Screen...");
-    if (settingsScreen) {
-        lv_obj_clean(settingsScreen);
+    if (settingsScreen && lv_obj_is_valid(settingsScreen)) {
         lv_obj_del(settingsScreen);
         settingsScreen = nullptr;
     }
     settingsScreen = lv_obj_create(NULL);
     lv_obj_add_style(settingsScreen, &style_screen, 0);
+    lv_obj_set_style_bg_color(settingsScreen, lv_color_hex(0x1A1A1A), 0); // Dark gray background
+    lv_obj_set_style_bg_opa(settingsScreen, LV_OPA_COVER, 0);
+    lv_obj_add_flag(settingsScreen, LV_OBJ_FLAG_SCROLLABLE); // Make screen scrollable
+    current_scroll_obj = settingsScreen;
 
-    // Header
-    lv_obj_t* header = lv_obj_create(settingsScreen);
-    lv_obj_set_size(header, SCREEN_WIDTH, 40);
-    lv_obj_set_style_bg_color(header, lv_color_hex(0x2D2D2D), 0);
-    lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t* title = lv_label_create(header);
-    lv_label_set_text(title, "Settings");
-    lv_obj_add_style(title, &style_title, 0);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
-
-    // Back Button
-    lv_obj_t* back_btn = lv_btn_create(header);
-    lv_obj_set_size(back_btn, 40, 30);
-    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 5, 0);
+    // Back Button (Top-Left)
+    lv_obj_t* back_btn = lv_btn_create(settingsScreen);
+    lv_obj_set_size(back_btn, 60, 40);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0); // Darker gray button
+    lv_obj_set_style_radius(back_btn, 5, 0);
     lv_obj_add_style(back_btn, &style_btn, 0);
     lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT); // Left arrow icon
     lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0); // White text
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
         createMainMenu();
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr; // Clear global pointer
+        }
     }, LV_EVENT_CLICKED, NULL);
 
-    // Container for settings options
-    lv_obj_t* cont = lv_obj_create(settingsScreen);
-    lv_obj_set_size(cont, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 50);
-    lv_obj_align(cont, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(cont, 10, 0); // Spacing between items
+    // Title
+    lv_obj_t* title = lv_label_create(settingsScreen);
+    lv_label_set_text(title, "Settings");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0); // White text
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
 
-    // --- Brightness Setting ---
-    lv_obj_t* brightness_cont = lv_obj_create(cont);
-    lv_obj_set_width(brightness_cont, lv_pct(100));
-    lv_obj_set_height(brightness_cont, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(brightness_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(brightness_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(brightness_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // Settings List
+    lv_obj_t* list = lv_list_create(settingsScreen);
+    lv_obj_set_size(list, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 70); // Adjust size
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 60); // Position below title
+    lv_obj_set_style_bg_color(list, lv_color_hex(0x2D2D2D), 0); // List background
+    lv_obj_set_style_pad_all(list, 10, 0); // Padding around list items
+    lv_obj_set_style_radius(list, 8, 0);
 
-    lv_obj_t* brightness_label = lv_label_create(brightness_cont);
-    lv_label_set_text(brightness_label, "Brightness");
-    lv_obj_add_style(brightness_label, &style_text, 0);
-
-    lv_obj_t* brightness_slider = lv_slider_create(brightness_cont);
-    lv_obj_set_width(brightness_slider, lv_pct(50));
-    lv_slider_set_range(brightness_slider, 10, 255); // Min 10, Max 255
-    lv_slider_set_value(brightness_slider, displayBrightness, LV_ANIM_OFF);
-    lv_obj_add_event_cb(brightness_slider, [](lv_event_t* e) {
-        lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e); // No cast needed
-        displayBrightness = (uint8_t)lv_slider_get_value(slider);
-        M5.Display.setBrightness(displayBrightness);
-        // Save brightness setting
-        Preferences prefs;
-        prefs.begin("appSettings", false);
-        prefs.putUChar("brightness", displayBrightness);
-        prefs.end();
-        DEBUG_PRINTF("Brightness set to %d\n", displayBrightness);
-    }, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // --- WiFi Enable/Disable ---
-    lv_obj_t* wifi_cont = lv_obj_create(cont);
-    lv_obj_set_width(wifi_cont, lv_pct(100));
-    lv_obj_set_height(wifi_cont, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(wifi_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(wifi_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(wifi_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    lv_obj_t* wifi_toggle_label = lv_label_create(wifi_cont);
-    lv_label_set_text(wifi_toggle_label, "Enable WiFi");
-    lv_obj_add_style(wifi_toggle_label, &style_text, 0);
-
-    lv_obj_t* wifi_switch = lv_switch_create(wifi_cont);
-    if (wifiEnabled) {
-        lv_obj_add_state(wifi_switch, LV_STATE_CHECKED);
-    }
-    lv_obj_add_event_cb(wifi_switch, [](lv_event_t* e) {
-        lv_obj_t* sw = (lv_obj_t*)lv_event_get_target(e); // No cast needed
-        wifiEnabled = lv_obj_has_state(sw, LV_STATE_CHECKED);
-        // Save WiFi setting
-        Preferences prefs;
-        prefs.begin("appSettings", false);
-        prefs.putBool("wifiEnabled", wifiEnabled);
-        prefs.end();
-        DEBUG_PRINTF("WiFi %s\n", wifiEnabled ? "Enabled" : "Disabled");
-        // Optionally turn WiFi hardware on/off immediately
-        if (wifiEnabled) {
-            WiFi.mode(WIFI_STA); // Or WIFI_AP_STA if needed
-            WiFi.begin(); // Reconnect or start AP if applicable
-        } else {
-            WiFi.disconnect(true);
-            WiFi.mode(WIFI_OFF);
+    // --- WiFi Settings ---
+    lv_obj_t* wifi_btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "WiFi");
+    lv_obj_add_style(wifi_btn, &style_network, 0); // Use network style
+    lv_obj_add_style(wifi_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(wifi_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
+        createWiFiManagerScreen();
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr;
         }
-        // updateStatusBar(); // Original error suggested updateStatus
-        updateStatus("WiFi status updated", 0xFFFFFF); // Use updateStatus as hinted by original error
-    }, LV_EVENT_VALUE_CHANGED, NULL);
+    }, LV_EVENT_CLICKED, NULL);
 
-    // --- Reset Device Button ---
-    lv_obj_t* reset_btn = lv_btn_create(cont);
-    lv_obj_set_width(reset_btn, lv_pct(80));
+    // --- Display Settings ---
+    lv_obj_t* display_btn = lv_list_add_btn(list, LV_SYMBOL_SETTINGS, "Display"); // Using settings icon for now
+    lv_obj_add_style(display_btn, &style_network, 0);
+    lv_obj_add_style(display_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(display_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
+        createBrightnessSettingsScreen(); // Go to brightness screen
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr;
+        }
+    }, LV_EVENT_CLICKED, NULL);
+
+    // --- Sound Settings ---
+    lv_obj_t* sound_btn = lv_list_add_btn(list, LV_SYMBOL_AUDIO, "Sound");
+    lv_obj_add_style(sound_btn, &style_network, 0);
+    lv_obj_add_style(sound_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(sound_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
+        createSoundSettingsScreen(); // Go to sound settings screen
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr;
+        }
+    }, LV_EVENT_CLICKED, NULL);
+
+    // --- Date & Time Settings ---
+    lv_obj_t* datetime_btn = lv_list_add_btn(list, LV_SYMBOL_IMAGE, "Date & Time");
+    lv_obj_add_style(datetime_btn, &style_network, 0);
+    lv_obj_add_style(datetime_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(datetime_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
+        createDateSelectionScreen(); // Go to date selection first
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr;
+        }
+    }, LV_EVENT_CLICKED, NULL);
+
+    // --- Power Management Settings ---
+    lv_obj_t* power_btn = lv_list_add_btn(list, LV_SYMBOL_POWER, "Power Management");
+    lv_obj_add_style(power_btn, &style_network, 0);
+    lv_obj_add_style(power_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(power_btn, [](lv_event_t* e) {
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
+        createPowerManagementScreen(); // Go to power management screen
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            settingsScreen = nullptr;
+        }
+    }, LV_EVENT_CLICKED, NULL);
+
+    // --- About/Info ---
+    lv_obj_t* about_btn = lv_list_add_btn(list, LV_SYMBOL_EYE_OPEN, "About"); // Using eye icon
+    lv_obj_add_style(about_btn, &style_network, 0);
+    lv_obj_add_style(about_btn, &style_network_pressed, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(about_btn, [](lv_event_t* e) {
+        // TODO: Create an "About" screen
+        DEBUG_PRINT("About screen not implemented yet.");
+        // Show temporary message box
+        lv_obj_t* msgbox = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(msgbox, "About");
+        lv_msgbox_add_text(msgbox, "Loss Prevention Log v1.0.0\n(c) 2025 Your Company");
+        lv_msgbox_add_footer_button(msgbox, "OK");
+        lv_obj_center(msgbox);
+        lv_obj_add_event_cb(msgbox, [](lv_event_t* e_msg) { /* Auto-closes */ }, LV_EVENT_VALUE_CHANGED, NULL);
+    }, LV_EVENT_CLICKED, NULL);
+
+
+    lv_scr_load(settingsScreen);
+    DEBUG_PRINT("Settings screen loaded");
+}
+
+
+void createViewLogsScreen() {
+    DEBUG_PRINT("Creating new view logs screen");
+    parsedLogEntries.clear(); // Clear previous entries when recreating the screen
+
+    lv_obj_t* logs_screen = lv_obj_create(NULL);
+    lv_obj_add_style(logs_screen, &style_screen, 0);
+    // Ensure the main screen itself starts fully opaque
+    lv_obj_set_style_bg_opa(logs_screen, LV_OPA_COVER, 0);
+
+    // --- Header ---
+    lv_obj_t* header = lv_obj_create(logs_screen);
+    lv_obj_set_size(header, SCREEN_WIDTH, 40);
+    lv_obj_set_pos(header, 0, 0);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE); // Ensure header is not scrollable
+
+    lv_obj_t* title = lv_label_create(header);
+    lv_label_set_text(title, "Log Entries - Last 3 Days");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_center(title);
+
+    // --- TabView ---
+    lv_obj_t* tabview = lv_tabview_create(logs_screen);
+    lv_tabview_set_tab_bar_position(tabview, LV_DIR_TOP);
+    lv_tabview_set_tab_bar_size(tabview, 30);
+    lv_obj_set_size(tabview, SCREEN_WIDTH, SCREEN_HEIGHT - 80); // Adjusted for buttons below
+    lv_obj_align(tabview, LV_ALIGN_TOP_MID, 0, 40); // Position below header
+    lv_obj_set_style_bg_color(tabview, lv_color_hex(0x2D2D2D), 0); // Tabview background
+
+    // --- Date & Time Logic ---
+    m5::rtc_date_t currentDateStruct;
+    M5.Rtc.getDate(&currentDateStruct);
+    m5::rtc_time_t currentTimeStruct;
+    M5.Rtc.getTime(&currentTimeStruct); // Need time too for mktime
+
+    struct tm currentTimeInfo = {0};
+    currentTimeInfo.tm_year = currentDateStruct.year - 1900;
+    currentTimeInfo.tm_mon = currentDateStruct.month - 1;
+    currentTimeInfo.tm_mday = currentDateStruct.date;
+    currentTimeInfo.tm_hour = currentTimeStruct.hours;
+    currentTimeInfo.tm_min = currentTimeStruct.minutes;
+    currentTimeInfo.tm_sec = currentTimeStruct.seconds;
+    time_t now = mktime(&currentTimeInfo); // Get current time as time_t
+
+    // --- File System & Log Reading ---
+    if (!fileSystemInitialized) {
+        initFileSystem(); // Attempt to initialize if not already done
+    }
+
+    if (fileSystemInitialized) {
+        // Manage SPI bus access carefully
+        SPI.end(); // End default SPI
+        delay(50); // Small delay might help bus release
+        SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+        digitalWrite(SD_SPI_CS_PIN, HIGH); // Ensure CS is initially high
+        delay(50);
+
+        if (!SD.exists(LOG_FILENAME)) {
+            DEBUG_PRINT("Log file not found, creating...");
+            File file = SD.open(LOG_FILENAME, FILE_WRITE);
+            if (file) {
+                file.println("# Log Created " + getTimestamp());
+                file.close();
+                DEBUG_PRINT("Log file created.");
+            } else {
+                DEBUG_PRINT("Failed to create log file!");
+            }
+        }
+
+        File log_file = SD.open(LOG_FILENAME, FILE_READ);
+        if (log_file) {
+            DEBUG_PRINT("Reading log file...");
+            while (log_file.available()) {
+                String line = log_file.readStringUntil('\n');
+                line.trim();
+                if (line.length() > 0 && !line.startsWith("#")) {
+                    time_t timestamp = parseTimestamp(line);
+                    if (timestamp != 0) { // Ensure timestamp was parsed correctly
+                        parsedLogEntries.push_back({line, timestamp});
+                    }
+                }
+            }
+            log_file.close();
+            DEBUG_PRINT("Finished reading log file.");
+        } else {
+            DEBUG_PRINT("Failed to open log file for reading.");
+        }
+        SPI_SD.end(); // End SD SPI
+        delay(50);
+        SPI.begin(); // Reinitialize default SPI (assuming it's needed elsewhere)
+        pinMode(TFT_DC, OUTPUT); // Re-init TFT DC pin if SPI.begin() resets it
+        digitalWrite(TFT_DC, HIGH);
+    } else {
+        DEBUG_PRINT("Filesystem not initialized, cannot read logs.");
+    }
+
+    // --- Prepare Tabs and Sort Entries by Day ---
+    char tab_names[3][16];
+    lv_obj_t* tabs[3];
+    std::vector<LogEntry*> entries_by_day[3]; // Store pointers for sorting
+
+    for (int i = 0; i < 3; i++) {
+        time_t day_target = now - (i * 86400); // Approx i days ago
+        struct tm day_time = *localtime(&day_target);
+
+        // Calculate start and end of the target day
+        day_time.tm_hour = 0; day_time.tm_min = 0; day_time.tm_sec = 0;
+        time_t day_start = mktime(&day_time);
+        day_time.tm_hour = 23; day_time.tm_min = 59; day_time.tm_sec = 59;
+        time_t day_end = mktime(&day_time);
+
+        strftime(tab_names[i], sizeof(tab_names[i]), "%m/%d/%y", &day_time); // Format tab name
+        tabs[i] = lv_tabview_add_tab(tabview, tab_names[i]);
+        lv_obj_set_style_bg_opa(tabs[i], LV_OPA_TRANSP, 0); // Make tab content area transparent
+        lv_obj_set_scroll_dir(tabs[i], LV_DIR_VER); // Allow scrolling within tab content area
+        lv_obj_set_scrollbar_mode(tabs[i], LV_SCROLLBAR_MODE_AUTO);
+        lv_obj_add_flag(tabs[i], LV_OBJ_FLAG_SCROLLABLE);
+
+        // Filter entries for this day
+        for (auto& entry : parsedLogEntries) {
+            if (entry.timestamp >= day_start && entry.timestamp <= day_end) {
+                entries_by_day[i].push_back(&entry);
+            }
+        }
+        // Sort entries within the day by timestamp (ascending)
+        std::sort(entries_by_day[i].begin(), entries_by_day[i].end(),
+                  [](const LogEntry* a, const LogEntry* b) {
+                      return a->timestamp < b->timestamp;
+                  });
+    }
+
+    // --- Populate Tabs with Log Entries ---
+    for (int i = 0; i < 3; i++) {
+        // Use the tab itself as the container
+        lv_obj_t* container = tabs[i];
+        lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN); // Arrange items vertically
+        lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_row(container, 5, 0); // Spacing between entries
+        lv_obj_set_style_pad_column(container, 0, 0);
+        lv_obj_set_style_pad_all(container, 5, 0); // Padding around the edges
+
+        if (entries_by_day[i].empty()) {
+            lv_obj_t* no_logs = lv_label_create(container);
+            lv_label_set_text(no_logs, "No entries for this day");
+            lv_obj_add_style(no_logs, &style_text, 0);
+            lv_obj_align(no_logs, LV_ALIGN_CENTER, 0, 20); // Center it roughly
+        } else {
+            int entry_num = 1;
+            for (const auto* entry : entries_by_day[i]) {
+                lv_obj_t* entry_btn = lv_btn_create(container);
+                // Let flexbox handle positioning, set width relative to parent
+                lv_obj_set_width(entry_btn, lv_pct(98));
+                lv_obj_set_height(entry_btn, 25);
+
+                lv_obj_add_style(entry_btn, &style_btn, 0);
+                lv_obj_add_style(entry_btn, &style_btn_pressed, LV_STATE_PRESSED);
+                lv_obj_set_style_bg_color(entry_btn, lv_color_hex(0x3A3A3A), 0);
+
+                struct tm* entry_time = localtime(&entry->timestamp);
+                char time_str[16];
+                strftime(time_str, sizeof(time_str), "%I:%M %p", entry_time); // Use %I for 12-hour, %p for AM/PM
+                // Remove leading zero if present (e.g., "02:30 PM" -> "2:30 PM")
+                if (time_str[0] == '0') {
+                    memmove(time_str, time_str + 1, strlen(time_str));
+                }
+                String entry_label_str = "Entry " + String(entry_num++) + ": " + String(time_str);
+
+                lv_obj_t* label = lv_label_create(entry_btn);
+                lv_label_set_text(label, entry_label_str.c_str());
+                lv_obj_add_style(label, &style_text, 0);
+                lv_obj_align(label, LV_ALIGN_LEFT_MID, 5, 0);
+
+                // Store pointer to the LogEntry struct in the button's user data
+                lv_obj_set_user_data(entry_btn, (void*)entry);
+
+                // --- Corrected Event Handler for Clicking a Log Entry Button ---
+                lv_obj_add_event_cb(entry_btn, [](lv_event_t* e) {
+                    LogEntry* log_entry = (LogEntry*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e));
+                    if (!log_entry || log_entry->text.isEmpty()) {
+                        DEBUG_PRINT("Invalid log entry data");
+                        return;
+                    }
+
+                    // Format the timestamp for the message box title
+                    struct tm* entry_tm = localtime(&log_entry->timestamp);
+                    char formatted_timestamp[32];
+                    strftime(formatted_timestamp, sizeof(formatted_timestamp), "%Y-%m-%d %I:%M:%S %p", entry_tm);
+
+                    // Extract the data part of the log entry
+                    int data_separator_pos = log_entry->text.lastIndexOf(": ");
+                    String entry_data = "";
+                    bool parse_success = false;
+                    if (data_separator_pos != -1) {
+                        entry_data = log_entry->text.substring(data_separator_pos + 2);
+                        entry_data.trim();
+                        if (!entry_data.isEmpty()) {
+                            parse_success = true;
+                            DEBUG_PRINTF("Successfully parsed log data using lastIndexOf: %s\n", entry_data.c_str());
+                        } else {
+                            DEBUG_PRINT("Extracted log data is empty after trim");
+                            entry_data = "(No data)";
+                        }
+                    } else {
+                        DEBUG_PRINT("Could not find data separator ': ' in log entry");
+                    }
+
+                    // Create and configure the message box
+                    lv_obj_t* msgbox = lv_msgbox_create(NULL);
+                    lv_obj_set_size(msgbox, 280, 180);
+                    lv_obj_center(msgbox);
+                    lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0);
+                    lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0);
+                    lv_obj_set_style_pad_all(msgbox, 10, 0);
+
+                    lv_obj_t* msg_title = lv_msgbox_add_title(msgbox, "Log Entry Details");
+                    String formatted_entry = parse_success ? getFormattedEntry(entry_data) : "Error parsing entry data.";
+                    String full_message = "Time: " + String(formatted_timestamp) + "\n" + formatted_entry;
+                    lv_obj_t* msg_text = lv_msgbox_add_text(msgbox, full_message.c_str());
+                    lv_obj_set_style_text_font(msg_text, &lv_font_montserrat_14, 0);
+                    lv_obj_set_style_text_line_space(msg_text, 2, 0);
+
+                    lv_obj_t* close_btn = lv_msgbox_add_footer_button(msgbox, "Close");
+
+                    // Corrected Close Button Event Handler
+                    lv_obj_add_event_cb(close_btn, [](lv_event_t* e_close) {
+                        lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_close);
+                        lv_obj_t* footer = lv_obj_get_parent(btn);
+                        lv_obj_t* current_msgbox = lv_obj_get_parent(footer);
+                        if (current_msgbox && lv_obj_is_valid(current_msgbox)) {
+                            lv_msgbox_close(current_msgbox);
+                            DEBUG_PRINT("Log entry message box closed.");
+                        }
+                    }, LV_EVENT_CLICKED, NULL);
+
+                }, LV_EVENT_CLICKED, NULL);
+            }
+        }
+    }
+
+    // --- Back Button ---
+    lv_obj_t* back_btn = lv_btn_create(logs_screen);
+    lv_obj_set_size(back_btn, 80, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_LEFT, 10, -5); // Position bottom left
+    lv_obj_add_style(back_btn, &style_btn, 0);
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
+    lv_obj_center(back_label);
+    lv_obj_move_foreground(back_btn); // Ensure it's above the tabview content potentially
+
+    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        lv_obj_t* old_screen = lv_scr_act();
+        createMainMenu(); // Go back to main menu
+        if (old_screen && old_screen != lv_scr_act()) { // Clean up old screen if different
+            lv_obj_delete(old_screen);
+        }
+        lv_task_handler();
+    }, LV_EVENT_CLICKED, NULL);
+
+    // --- Reset Button with Updated Msgbox for LVGL 9.2.2 ---
+    lv_obj_t* reset_btn = lv_btn_create(logs_screen);
+    lv_obj_set_size(reset_btn, 80, 40);
+    lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_RIGHT, -10, 0);
     lv_obj_add_style(reset_btn, &style_btn, 0);
     lv_obj_add_style(reset_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* reset_label = lv_label_create(reset_btn);
-    lv_label_set_text(reset_label, "Reset Device");
+    lv_label_set_text(reset_label, "Reset");
     lv_obj_center(reset_label);
+    lv_obj_move_foreground(reset_btn);
+
     lv_obj_add_event_cb(reset_btn, [](lv_event_t* e) {
-        // Show confirmation message box
-        lv_obj_t* msgbox = lv_msgbox_create(NULL);
-        lv_msgbox_add_title(msgbox, "Confirm Reset");
-        lv_msgbox_add_text(msgbox, "Are you sure you want to reset the device? This cannot be undone.");
-        // Add buttons using the v9 method
-        lv_msgbox_add_footer_button(msgbox, "Cancel"); // ID 0
-        lv_msgbox_add_footer_button(msgbox, "Reset");  // ID 1
+        // Create message box for confirmation
+        lv_obj_t* msgbox = lv_msgbox_create(NULL); // Modal dialog
+        lv_obj_set_size(msgbox, 250, 150);
         lv_obj_center(msgbox);
-        // Add event callback to the message box itself
-        // Try LV_EVENT_CLICKED instead of LV_EVENT_VALUE_CHANGED to see if it resolves linter issue
-        lv_obj_add_event_cb(msgbox, (lv_event_cb_t)reset_confirm_event_cb, LV_EVENT_CLICKED, NULL);
-    }, LV_EVENT_CLICKED, NULL);
+        lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0);
 
+        // Add title
+        lv_msgbox_add_title(msgbox, "Confirm Reset");
 
-    // Load the screen
-    lv_scr_load(settingsScreen);
-    DEBUG_PRINT("Settings Screen created.");
-}
+        // Add message text
+        lv_obj_t* text = lv_msgbox_add_text(msgbox, "Are you sure you want to delete all log entries?");
+        lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, 0);
 
-void createViewLogsScreen() {
-    DEBUG_PRINT("Creating View Logs Screen...");
-    if (view_logs_screen) {
-        lv_obj_clean(view_logs_screen);
-        lv_obj_del(view_logs_screen);
-        view_logs_screen = nullptr;
-    }
-    view_logs_screen = lv_obj_create(NULL);
-    lv_obj_add_style(view_logs_screen, &style_screen, 0);
+        // Add footer buttons with type casting
+        lv_obj_t* no_btn = (lv_obj_t*)lv_msgbox_add_footer_button(msgbox, "No");  // Index 0
+        lv_obj_t* yes_btn = (lv_obj_t*)lv_msgbox_add_footer_button(msgbox, "Yes"); // Index 1
 
-    // Header
-    lv_obj_t* header = lv_obj_create(view_logs_screen);
-    lv_obj_set_size(header, SCREEN_WIDTH, 40);
-    lv_obj_set_style_bg_color(header, lv_color_hex(0x2D2D2D), 0);
-    lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t* title = lv_label_create(header);
-    lv_label_set_text(title, "View Logs");
-    lv_obj_add_style(title, &style_title, 0);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+        // Event callback for button clicks
+        lv_obj_add_event_cb(msgbox, [](lv_event_t* e) {
+                lv_obj_t* msgbox = (lv_obj_t*)lv_event_get_current_target(e);
+            uint32_t btn_id = *(uint32_t*)lv_event_get_param(e); // Get the clicked button index
 
-    // Back Button
-    lv_obj_t* back_btn = lv_btn_create(header);
-    lv_obj_set_size(back_btn, 40, 30);
-    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 5, 0);
-    lv_obj_add_style(back_btn, &style_btn, 0);
-    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
-    lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
-    lv_obj_center(back_label);
-    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        createMainMenu();
-    }, LV_EVENT_CLICKED, NULL);
+            if (btn_id == 1) { // "Yes" button (index 1, since "No" is 0)
+                DEBUG_PRINT("Reset confirmed. Deleting log entries...");
 
-    // Date Range Selection (Placeholder - Needs implementation)
-    // TODO: Add date pickers or similar UI for selecting start/end dates
+                // Handle SPI and SD operations
+                SPI.end();
+                delay(100);
+                SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+                digitalWrite(SD_SPI_CS_PIN, HIGH);
+                delay(100);
 
-    // Log List Container
-    lv_obj_t* log_list_cont = lv_obj_create(view_logs_screen);
-    lv_obj_set_size(log_list_cont, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 100); // Adjust size for header/footer
-    lv_obj_align(log_list_cont, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_bg_opa(log_list_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(log_list_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(log_list_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-    lv_obj_add_flag(log_list_cont, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(log_list_cont, LV_SCROLLBAR_MODE_ACTIVE);
-    lv_obj_set_style_pad_row(log_list_cont, 5, 0); // Spacing between log entries
+                if (SD.remove(LOG_FILENAME)) {
+                    File file = SD.open(LOG_FILENAME, FILE_WRITE);
+                    if (file) {
+                        file.println("# Loss Prevention Log - Reset " + getTimestamp());
+                        file.close();
+                        DEBUG_PRINT("Log file reset successfully");
+                    } else {
+                        DEBUG_PRINT("Failed to create new log file after reset");
+                    }
+                } else {
+                    DEBUG_PRINT("Failed to delete log file");
+                }
 
-    // Load and display logs (Initial load for today or default range)
-    // Assuming loadLogEntriesForDateRange populates parsedLogEntries
-    // For now, just load all entries from the file for simplicity
-    parsedLogEntries.clear(); // Clear previous entries
-    loadAllLogEntries(parsedLogEntries); // Load all entries into the vector
+                SPI_SD.end();
+                SPI.begin();
+                pinMode(TFT_DC, OUTPUT);
+                digitalWrite(TFT_DC, HIGH);
 
-    // Sort entries by timestamp (descending - newest first)
-    std::sort(parsedLogEntries.begin(), parsedLogEntries.end(), [](const LogEntry& a, const LogEntry& b) {
-        return a.timestamp > b.timestamp; // Sort descending
-    });
-
-    totalLogPages = (parsedLogEntries.size() + LOGS_PER_PAGE - 1) / LOGS_PER_PAGE;
-    currentLogPage = 0;
-
-    // Display the first page of logs
-    displayLogPage(log_list_cont, currentLogPage);
-
-    // Pagination Controls
-    lv_obj_t* footer = lv_obj_create(view_logs_screen);
-    lv_obj_set_size(footer, SCREEN_WIDTH, 40);
-    lv_obj_align(footer, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_color(footer, lv_color_hex(0x2D2D2D), 0);
-    lv_obj_set_style_bg_opa(footer, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(footer, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(footer, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(footer, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    // Previous Button
-    lv_obj_t* prev_btn = lv_btn_create(footer);
-    lv_obj_add_style(prev_btn, &style_btn, 0);
-    lv_obj_add_style(prev_btn, &style_btn_pressed, LV_STATE_PRESSED);
-    lv_obj_t* prev_label = lv_label_create(prev_btn);
-    lv_label_set_text(prev_label, LV_SYMBOL_PREV);
-    lv_obj_center(prev_label);
-    // Use user data, ensure validity check
-    lv_obj_add_event_cb(prev_btn, [](lv_event_t* e) {
-        if (currentLogPage > 0) {
-            currentLogPage--;
-            lv_obj_t* list_cont = (lv_obj_t*)lv_event_get_user_data(e);
-            if (list_cont && lv_obj_is_valid(list_cont)) {
-                 displayLogPage(list_cont, currentLogPage);
+                // Clear log entries and refresh screen
+                parsedLogEntries.clear();
+                lv_obj_t* screen_to_delete = lv_scr_act();
+                createViewLogsScreen();
+                if (screen_to_delete && screen_to_delete != lv_scr_act()) {
+                    lv_obj_delete(screen_to_delete);
+                }
+            } else { // "No" button (index 0)
+                DEBUG_PRINT("Reset cancelled.");
             }
-        }
-    }, LV_EVENT_CLICKED, log_list_cont);
 
-    // Page Indicator Label
-    lv_obj_t* page_label = lv_label_create(footer);
-    lv_label_set_text_fmt(page_label, "Page %d / %d", currentLogPage + 1, totalLogPages > 0 ? totalLogPages : 1);
-    lv_obj_add_style(page_label, &style_text, 0);
-    lv_obj_set_user_data(page_label, log_list_cont); // Store list container for update
+            // Close the message box
+            lv_msgbox_close(msgbox);
+        }, LV_EVENT_VALUE_CHANGED, NULL);
 
-    // Next Button
-    lv_obj_t* next_btn = lv_btn_create(footer);
-    lv_obj_add_style(next_btn, &style_btn, 0);
-    lv_obj_add_style(next_btn, &style_btn_pressed, LV_STATE_PRESSED);
-    lv_obj_t* next_label = lv_label_create(next_btn);
-    lv_label_set_text(next_label, LV_SYMBOL_NEXT);
-    lv_obj_center(next_label);
-    // Use user data, ensure validity check
-    lv_obj_add_event_cb(next_btn, [](lv_event_t* e) {
-        if (currentLogPage < totalLogPages - 1) {
-            currentLogPage++;
-            lv_obj_t* list_cont = (lv_obj_t*)lv_event_get_user_data(e);
-             if (list_cont && lv_obj_is_valid(list_cont)) {
-                 displayLogPage(list_cont, currentLogPage);
-             }
-        }
-    }, LV_EVENT_CLICKED, log_list_cont);
+    }, LV_EVENT_CLICKED, NULL);
 
-    // Load the screen
-    lv_scr_load(view_logs_screen);
-    DEBUG_PRINT("View Logs Screen created.");
+    lv_scr_load(logs_screen);
+    lv_task_handler();
+    DEBUG_PRINT("View logs screen created successfully");
 }
 
-// Helper function to display a specific page of logs
+// Function to display a specific page of logs
 void displayLogPage(lv_obj_t* list_container, int page) {
+    if (!list_container || !lv_obj_is_valid(list_container)) {
+        DEBUG_PRINT("Error: Invalid list container in displayLogPage.");
+        return;
+    }
     lv_obj_clean(list_container); // Clear previous entries
 
     int start_index = page * LOGS_PER_PAGE;
@@ -866,38 +1135,62 @@ void displayLogPage(lv_obj_t* list_container, int page) {
         end_index = parsedLogEntries.size();
     }
 
-    if (parsedLogEntries.empty()) {
+    DEBUG_PRINTF("Displaying page %d (Indices %d to %d)\n", page, start_index, end_index - 1);
+
+    if (start_index >= end_index) {
         lv_obj_t* empty_label = lv_label_create(list_container);
-        lv_label_set_text(empty_label, "No log entries found.");
+        lv_label_set_text(empty_label, "No logs on this page.");
+        lv_obj_center(empty_label);
         lv_obj_add_style(empty_label, &style_text, 0);
-        lv_obj_align(empty_label, LV_ALIGN_CENTER, 0, 0);
     } else {
         for (int i = start_index; i < end_index; ++i) {
-            lv_obj_t* entry_label = lv_label_create(list_container);
-            // Format the entry for display (e.g., timestamp + data)
-            String display_text = getFormattedEntry(parsedLogEntries[i]); // Corrected call
-            lv_label_set_text(entry_label, display_text.c_str());
-            lv_label_set_long_mode(entry_label, LV_LABEL_LONG_WRAP); // Wrap long lines
-            lv_obj_set_width(entry_label, lv_pct(100));
-            lv_obj_add_style(entry_label, &style_text, 0);
-            // Add alternating background color for readability (optional)
-            if (i % 2 == 0) {
-                 lv_obj_set_style_bg_color(entry_label, lv_color_hex(0x252525), 0);
-                 lv_obj_set_style_bg_opa(entry_label, LV_OPA_COVER, 0);
-            }
+            const LogEntry& entry = parsedLogEntries[i];
+            // Format timestamp
+            char time_str[20]; // Buffer for formatted time
+            struct tm timeinfo;
+            localtime_r(&entry.timestamp, &timeinfo);
+            strftime(time_str, sizeof(time_str), "%m/%d %H:%M:%S", &timeinfo); // MM/DD HH:MM:SS
+
+            // Format entry data
+            String formatted_data = getFormattedEntry(parsedLogEntries[i]);
+
+            // Create list item container
+            lv_obj_t* item_cont = lv_obj_create(list_container);
+            lv_obj_set_width(item_cont, lv_pct(100)); // Use percentage width
+            lv_obj_set_height(item_cont, LV_SIZE_CONTENT); // Adjust height based on content
+            lv_obj_set_style_bg_color(item_cont, lv_color_hex(0x3A3A3A), 0); // Darker item background
+            lv_obj_set_style_pad_all(item_cont, 5, 0);
+            lv_obj_set_style_radius(item_cont, 5, 0);
+            lv_obj_set_style_border_width(item_cont, 0, 0);
+            lv_obj_set_flex_flow(item_cont, LV_FLEX_FLOW_COLUMN); // Arrange labels vertically
+
+            // Timestamp Label
+            lv_obj_t* time_label_item = lv_label_create(item_cont); // Renamed to avoid conflict
+            lv_label_set_text(time_label_item, time_str);
+            lv_obj_set_style_text_font(time_label_item, &lv_font_montserrat_12, 0); // Smaller font
+            lv_obj_set_style_text_color(time_label_item, lv_color_hex(0xCCCCCC), 0); // Lighter gray
+
+            // Data Label
+            lv_obj_t* data_label = lv_label_create(item_cont);
+            lv_label_set_text(data_label, formatted_data.c_str());
+            lv_label_set_long_mode(data_label, LV_LABEL_LONG_WRAP); // Wrap long text
+            lv_obj_set_width(data_label, lv_pct(98)); // Allow wrapping within container width
+            lv_obj_add_style(data_label, &style_text, 0); // Use standard text style
+            lv_obj_set_style_text_font(data_label, &lv_font_montserrat_14, 0); // Standard font size
         }
     }
 
-    // Update page indicator label (find it within the parent's children)
-    lv_obj_t* screen = lv_obj_get_screen(list_container);
-    lv_obj_t* footer = lv_obj_get_child(screen, -1); // Assuming footer is the last child
-    if (footer) {
-        lv_obj_t* page_label = lv_obj_get_child(footer, 1); // Assuming label is the middle child
+    // Update pagination label
+    lv_obj_t* page_cont = lv_obj_get_parent(list_container); // Get the main screen
+    page_cont = lv_obj_get_child(page_cont, -1); // Get the last child (should be page_cont)
+    if (page_cont && lv_obj_get_child_cnt(page_cont) == 3) { // Basic check
+        lv_obj_t* page_label = (lv_obj_t*)lv_obj_get_user_data(page_cont); // Retrieve label from user data
         if (page_label) {
-            lv_label_set_text_fmt(page_label, "Page %d / %d", currentLogPage + 1, totalLogPages > 0 ? totalLogPages : 1);
+            lv_label_set_text_fmt(page_label, "Page %d / %d", page + 1, totalLogPages > 0 ? totalLogPages : 1);
         }
     }
 }
+
 
 void createGenderMenu() {
     DEBUG_PRINT("Creating Gender Menu...");
@@ -985,7 +1278,6 @@ void createGenderMenu() {
     DEBUG_PRINT("Gender Menu created.");
 }
 
-// Implementation from .ino lines 649-702 (createApparelTypeMenu)
 void createApparelTypeMenu() {
     DEBUG_PRINT("Creating Apparel Type Menu...");
     if (apparel_screen) { // Use the correct pointer name
@@ -1077,12 +1369,104 @@ void createApparelTypeMenu() {
     lv_scr_load(apparel_screen);
     DEBUG_PRINT("Apparel Type Menu created.");
 }
+void createItemMenu() {
+    if (itemMenu) { lv_obj_del(itemMenu); itemMenu = nullptr; }
+    itemMenu = lv_obj_create(NULL); lv_obj_add_style(itemMenu, &style_screen, 0); lv_scr_load(itemMenu);
+    lv_obj_t *header = lv_obj_create(itemMenu); lv_obj_set_size(header, 320, 50); lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
+    lv_obj_t *title = lv_label_create(header); lv_label_set_text(title, "Select Item"); lv_obj_add_style(title, &style_title, 0); lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *list_cont = lv_obj_create(itemMenu); lv_obj_set_size(list_cont, 280, 180); lv_obj_align(list_cont, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_bg_color(list_cont, lv_color_hex(0x4A4A4A), 0); lv_obj_set_flex_flow(list_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(list_cont, 5, 0); lv_obj_set_scroll_dir(list_cont, LV_DIR_VER); lv_obj_set_scrollbar_mode(list_cont, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_add_flag(list_cont, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_MOMENTUM)); // Corrected flag usage with cast
+    for (int i = 0; i < NUM_ITEMS; i++) { // Use calculated NUM_ITEMS
+        lv_obj_t *btn = lv_btn_create(list_cont); lv_obj_set_width(btn, lv_pct(100)); lv_obj_set_height(btn, 40);
+        lv_obj_add_style(btn, &style_btn, 0); lv_obj_add_style(btn, &style_btn_pressed, LV_STATE_PRESSED);
+        lv_obj_t *label = lv_label_create(btn); lv_label_set_text(label, items[i]); lv_obj_center(label);
+        lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+            lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e); // Corrected cast
+            lv_obj_t* label = lv_obj_get_child(target_btn, 0);
+            if (label) { currentEntry += String(lv_label_get_text(label)); createConfirmScreen(); }
+        }, LV_EVENT_CLICKED, NULL);
+    }
+    lv_obj_update_layout(list_cont); // Update layout before checking scroll height
+    if (lv_obj_get_content_height(list_cont) > lv_obj_get_height(list_cont)) current_scroll_obj = list_cont; else current_scroll_obj = nullptr;
+}
 
-// Helper struct for color info
-struct ColorInfo {
-    const char* name;
-    uint32_t hexValue;
-};
+void createConfirmScreen() {
+    DEBUG_PRINT("Creating confirmation screen");
+    
+    // Clean up any existing confirm screen first
+    if (confirmScreen) {
+        DEBUG_PRINT("Cleaning existing confirm screen");
+        lv_obj_del(confirmScreen);
+        confirmScreen = nullptr;
+        lv_timer_handler(); // Process deletion immediately
+    }
+    
+    // Create new confirmation screen
+    confirmScreen = lv_obj_create(NULL);
+    if (!confirmScreen) {
+        DEBUG_PRINT("Failed to create confirmation screen");
+        createMainMenu(); // Fallback to main menu
+        return;
+    }
+    
+    lv_obj_add_style(confirmScreen, &style_screen, 0);
+    lv_scr_load(confirmScreen);
+    DEBUG_PRINTF("Confirm screen created: %p\n", confirmScreen);
+    
+    lv_timer_handler(); // Process any pending UI updates
+
+    lv_obj_t *header = lv_obj_create(confirmScreen);
+    lv_obj_set_size(header, 320, 50);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
+    lv_obj_t *title = lv_label_create(header);
+    lv_label_set_text(title, "Confirm Entry");
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+
+    // Create a local copy of the formatted entry to avoid memory issues
+    String formattedEntryStr = getFormattedEntry(currentEntry);
+    
+    lv_obj_t *preview = lv_label_create(confirmScreen);
+    lv_label_set_text(preview, formattedEntryStr.c_str());
+    lv_obj_add_style(preview, &style_text, 0);
+    lv_obj_set_size(preview, 280, 140);
+    lv_obj_align(preview, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_bg_color(preview, lv_color_hex(0x4A4A4A), 0);
+    lv_obj_set_style_pad_all(preview, 10, 0);
+
+    lv_obj_t *btn_container = lv_obj_create(confirmScreen);
+    lv_obj_remove_style_all(btn_container);
+    lv_obj_set_size(btn_container, 320, 50);
+    lv_obj_align(btn_container, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_flex_flow(btn_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // Create a local copy of the current entry for the event callbacks
+    String entryToSave = currentEntry;
+    
+    lv_obj_t *btn_confirm = lv_btn_create(btn_container);
+    lv_obj_set_size(btn_confirm, 120, 40);
+    lv_obj_add_style(btn_confirm, &style_btn, 0);
+    lv_obj_add_style(btn_confirm, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t *confirm_label = lv_label_create(btn_confirm);
+    lv_label_set_text(confirm_label, "Confirm");
+    lv_obj_center(confirm_label);
+    
+    // Store a copy of the current entry in user data to avoid using the global variable
+    lv_obj_set_user_data(btn_confirm, (void*)strdup(formattedEntryStr.c_str()));
+    
+    lv_obj_add_event_cb(btn_confirm, [](lv_event_t *e) {
+        lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
+        saveEntry(currentEntry); // Save raw entry
+        createMainMenu();
+        DEBUG_PRINT("Returning to main menu after confirmation");
+    }, LV_EVENT_CLICKED, NULL);
+    
+    // Process UI updates to ensure everything is properly initialized
+    lv_timer_handler();
+}
 
 // Define colors (can be expanded)
 const ColorInfo colors[] = {
@@ -1867,107 +2251,6 @@ void createColorMenuShoes() {
     DEBUG_PRINT("Shoes color menu loaded");
 }
 
-
-void createItemMenu() {
-    if (itemMenu) { lv_obj_del(itemMenu); itemMenu = nullptr; }
-    itemMenu = lv_obj_create(NULL); lv_obj_add_style(itemMenu, &style_screen, 0); lv_scr_load(itemMenu);
-    lv_obj_t *header = lv_obj_create(itemMenu); lv_obj_set_size(header, 320, 50); lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
-    lv_obj_t *title = lv_label_create(header); lv_label_set_text(title, "Select Item"); lv_obj_add_style(title, &style_title, 0); lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_t *list_cont = lv_obj_create(itemMenu); lv_obj_set_size(list_cont, 280, 180); lv_obj_align(list_cont, LV_ALIGN_TOP_MID, 0, 60);
-    lv_obj_set_style_bg_color(list_cont, lv_color_hex(0x4A4A4A), 0); lv_obj_set_flex_flow(list_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(list_cont, 5, 0); lv_obj_set_scroll_dir(list_cont, LV_DIR_VER); lv_obj_set_scrollbar_mode(list_cont, LV_SCROLLBAR_MODE_AUTO);
-    lv_obj_add_flag(list_cont, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_MOMENTUM)); // Corrected flag usage with cast
-    for (int i = 0; i < NUM_ITEMS; i++) { // Use calculated NUM_ITEMS
-        lv_obj_t *btn = lv_btn_create(list_cont); lv_obj_set_width(btn, lv_pct(100)); lv_obj_set_height(btn, 40);
-        lv_obj_add_style(btn, &style_btn, 0); lv_obj_add_style(btn, &style_btn_pressed, LV_STATE_PRESSED);
-        lv_obj_t *label = lv_label_create(btn); lv_label_set_text(label, items[i]); lv_obj_center(label);
-        lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-            lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e); // Corrected cast
-            lv_obj_t* label = lv_obj_get_child(target_btn, 0);
-            if (label) { currentEntry += String(lv_label_get_text(label)); createConfirmScreen(); }
-        }, LV_EVENT_CLICKED, NULL);
-    }
-    lv_obj_update_layout(list_cont); // Update layout before checking scroll height
-    if (lv_obj_get_content_height(list_cont) > lv_obj_get_height(list_cont)) current_scroll_obj = list_cont; else current_scroll_obj = nullptr;
-}
-
-void createConfirmScreen() {
-    DEBUG_PRINT("Creating confirmation screen");
-    
-    // Clean up any existing confirm screen first
-    if (confirmScreen) {
-        DEBUG_PRINT("Cleaning existing confirm screen");
-        lv_obj_del(confirmScreen);
-        confirmScreen = nullptr;
-        lv_timer_handler(); // Process deletion immediately
-    }
-    
-    // Create new confirmation screen
-    confirmScreen = lv_obj_create(NULL);
-    if (!confirmScreen) {
-        DEBUG_PRINT("Failed to create confirmation screen");
-        createMainMenu(); // Fallback to main menu
-        return;
-    }
-    
-    lv_obj_add_style(confirmScreen, &style_screen, 0);
-    lv_scr_load(confirmScreen);
-    DEBUG_PRINTF("Confirm screen created: %p\n", confirmScreen);
-    
-    lv_timer_handler(); // Process any pending UI updates
-
-    lv_obj_t *header = lv_obj_create(confirmScreen);
-    lv_obj_set_size(header, 320, 50);
-    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
-    lv_obj_t *title = lv_label_create(header);
-    lv_label_set_text(title, "Confirm Entry");
-    lv_obj_add_style(title, &style_title, 0);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
-
-    // Create a local copy of the formatted entry to avoid memory issues
-    String formattedEntryStr = getFormattedEntry(currentEntry);
-    
-    lv_obj_t *preview = lv_label_create(confirmScreen);
-    lv_label_set_text(preview, formattedEntryStr.c_str());
-    lv_obj_add_style(preview, &style_text, 0);
-    lv_obj_set_size(preview, 280, 140);
-    lv_obj_align(preview, LV_ALIGN_TOP_MID, 0, 60);
-    lv_obj_set_style_bg_color(preview, lv_color_hex(0x4A4A4A), 0);
-    lv_obj_set_style_pad_all(preview, 10, 0);
-
-    lv_obj_t *btn_container = lv_obj_create(confirmScreen);
-    lv_obj_remove_style_all(btn_container);
-    lv_obj_set_size(btn_container, 320, 50);
-    lv_obj_align(btn_container, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_flex_flow(btn_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    // Create a local copy of the current entry for the event callbacks
-    String entryToSave = currentEntry;
-    
-    lv_obj_t *btn_confirm = lv_btn_create(btn_container);
-    lv_obj_set_size(btn_confirm, 120, 40);
-    lv_obj_add_style(btn_confirm, &style_btn, 0);
-    lv_obj_add_style(btn_confirm, &style_btn_pressed, LV_STATE_PRESSED);
-    lv_obj_t *confirm_label = lv_label_create(btn_confirm);
-    lv_label_set_text(confirm_label, "Confirm");
-    lv_obj_center(confirm_label);
-    
-    // Store a copy of the current entry in user data to avoid using the global variable
-    lv_obj_set_user_data(btn_confirm, (void*)strdup(formattedEntryStr.c_str()));
-    
-    lv_obj_add_event_cb(btn_confirm, [](lv_event_t *e) {
-        lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
-        saveEntry(currentEntry); // Save raw entry
-        createMainMenu();
-        DEBUG_PRINT("Returning to main menu after confirmation");
-    }, LV_EVENT_CLICKED, NULL);
-    
-    // Process UI updates to ensure everything is properly initialized
-    lv_timer_handler();
-}
-
-
 // --- Settings Screens ---
 
 void createSoundSettingsScreen() {
@@ -2545,6 +2828,19 @@ void createWiFiManagerScreen() {
                         lv_msgbox_add_text(msgbox, "Actions (Connect/Forget) not yet implemented.");
                         lv_msgbox_add_footer_button(msgbox, "OK");
                         lv_obj_center(msgbox);
+                        // --- ADDED: Attach click handler to the main item container ---
+                        // --- ADDED FOR DEBUGGING ---
+                        lv_obj_t* target_btn_dbg = static_cast<lv_obj_t*>(lv_event_get_target(e));
+                        lv_obj_t* parent_cont_dbg = lv_obj_get_parent(target_btn_dbg);
+                        Serial.printf("[DEBUG] Inside lambda: stored_ssid = '%s'\n", stored_ssid ? stored_ssid : "NULL");
+                        Serial.printf("[DEBUG] Inside lambda: target_btn = %p\n", (void*)target_btn_dbg);
+                        Serial.printf("[DEBUG] Inside lambda: parent_cont = %p\n", (void*)parent_cont_dbg);
+                        // --- END ADDED FOR DEBUGGING ---
+                        // DEBUG_PRINT("Attaching click handler for SSID: %s to item_cont %p\n", ssid.c_str(), item_cont); // Temporarily commented out for debugging
+                        // lv_obj_add_flag(...); // Temporarily commented out for debugging
+                        // lv_obj_add_event_cb(...); // Temporarily commented out for debugging
+                        // --- END ADDED ---
+
                         lv_obj_add_event_cb(msgbox, [](lv_event_t* e_msg) {
                              // Auto-closes in v9
                         }, LV_EVENT_VALUE_CHANGED, NULL);
@@ -2566,6 +2862,29 @@ void createWiFiManagerScreen() {
     DEBUG_PRINT("WiFi Manager screen loaded");
 }
 
+// --- ADDED: Event handler for clicking a saved network item ---
+static void saved_network_item_click_cb(lv_event_t* e) {
+    lv_obj_t* item_cont = (lv_obj_t*)lv_event_get_target(e);
+    char* ssid_cstr = (char*)lv_event_get_user_data(e);
+
+    if (!ssid_cstr) {
+        DEBUG_PRINT("Error: SSID data missing in saved network click event.");
+        return;
+    }
+
+    String ssid = String(ssid_cstr);
+    DEBUG_PRINTF("Saved network item clicked: %s\n", ssid.c_str());
+
+    // Ensure SPI bus is released before potentially switching screens
+    releaseSPIBus();
+
+    // Transition to the network details screen
+    createNetworkDetailsScreen(ssid);
+
+    // No need to free ssid_cstr here as it's managed by LVGL or duplicated elsewhere if needed
+}
+// --- END ADDED ---
+
 // --- Implementation of the saved network delete callback ---
 static void saved_network_delete_cb(lv_event_t* e_del) {
     lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
@@ -2574,7 +2893,7 @@ static void saved_network_delete_cb(lv_event_t* e_del) {
         char* data_to_free = (char*)lv_obj_get_user_data(target_btn);
         if (data_to_free) {
             free(data_to_free);
-            DEBUG_PRINTF("Freed SSID user data for button via named callback.\n");
+            DEBUG_PRINT("Freed SSID user data for button via named callback.\n");
         }
     }
 }
@@ -3359,7 +3678,6 @@ void createDateSelectionScreen() {
     lv_scr_load(date_screen);
     // date_screen = nullptr; // Should not clear static pointer here if it's meant to persist
 }
-
 
 void createTimeSelectionScreen() {
     static lv_obj_t* time_screen = nullptr; // Keep static to manage deletion
