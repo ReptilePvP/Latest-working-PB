@@ -238,7 +238,10 @@ void initStyles() {
     lv_style_set_shadow_color(&style_network, lv_color_hex(0x000000)); // Black shadow
     lv_style_set_shadow_width(&style_network, 10);
     lv_style_set_shadow_spread(&style_network, 2);
-    lv_style_set_pad_all(&style_network, 5);
+    lv_style_set_pad_all(&style_network, 5); // Keep horizontal padding
+    lv_style_set_pad_ver(&style_network, 10); // Add vertical padding
+    lv_style_set_text_font(&style_network, &lv_font_montserrat_16); // Set font for list items
+    lv_style_set_text_color(&style_network, lv_color_hex(0xFFFFFF)); // Ensure text color is white
 
     lv_style_init(&style_network_pressed); // Renamed from style_network_item_pressed for consistency
     lv_style_set_bg_color(&style_network_pressed, lv_color_hex(0x404040)); // Lighter gray when pressed
@@ -649,7 +652,6 @@ void createSettingsScreen() {
     settingsScreen = lv_obj_create(NULL);
     lv_obj_add_style(settingsScreen, &style_screen, 0);
     lv_obj_set_style_bg_color(settingsScreen, lv_color_hex(0x1A1A1A), 0); // Dark gray background
-    lv_obj_set_style_bg_opa(settingsScreen, LV_OPA_COVER, 0);
     lv_obj_add_flag(settingsScreen, LV_OBJ_FLAG_SCROLLABLE); // Make screen scrollable
     current_scroll_obj = settingsScreen;
 
@@ -657,10 +659,10 @@ void createSettingsScreen() {
     lv_obj_t* back_btn = lv_btn_create(settingsScreen);
     lv_obj_set_size(back_btn, 60, 40);
     lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
-    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0); // Darker gray button
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x6c757d), 0); // Use a neutral gray
     lv_obj_set_style_radius(back_btn, 5, 0);
-    lv_obj_add_style(back_btn, &style_btn, 0);
-    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    // lv_obj_add_style(back_btn, &style_btn, 0); // Remove red style
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED); // Keep pressed style (or define a gray pressed style)
     lv_obj_t* back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, LV_SYMBOL_LEFT); // Left arrow icon
     lv_obj_center(back_label);
@@ -687,6 +689,7 @@ void createSettingsScreen() {
     lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 60); // Position below title
     lv_obj_set_style_bg_color(list, lv_color_hex(0x2D2D2D), 0); // List background
     lv_obj_set_style_pad_all(list, 10, 0); // Padding around list items
+    lv_obj_set_style_pad_row(list, 10, 0); // Add padding between rows
     lv_obj_set_style_radius(list, 8, 0);
 
     // --- WiFi Settings ---
@@ -3545,7 +3548,6 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
 }
 
 
-// --- Date/Time Selection Screens ---
 
 // Static callback handlers for date/time rollers
 static void on_year_change(lv_event_t* e) {
