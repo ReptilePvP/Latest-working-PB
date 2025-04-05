@@ -917,6 +917,7 @@ void createViewLogsScreen() {
         lv_obj_set_style_pad_column(container, 0, 0);
         lv_obj_set_style_pad_all(container, 5, 0); // Padding around the edges
 
+
         if (entries_by_day[i].empty()) {
             lv_obj_t* no_logs = lv_label_create(container);
             lv_label_set_text(no_logs, "No entries for this day");
@@ -937,7 +938,7 @@ void createViewLogsScreen() {
                 struct tm* entry_time = localtime(&entry->timestamp);
                 char time_str[16];
                 strftime(time_str, sizeof(time_str), "%I:%M %p", entry_time); // Use %I for 12-hour, %p for AM/PM
-                // Remove leading zero if present (e.g., "02:30 PM" -> "2:30 PM")
+                // Remove leading zero if present (e.g., "02:30 PM" -> "2:30 PM") - Optional but cleaner
                 if (time_str[0] == '0') {
                     memmove(time_str, time_str + 1, strlen(time_str));
                 }
@@ -951,68 +952,108 @@ void createViewLogsScreen() {
                 // Store pointer to the LogEntry struct in the button's user data
                 lv_obj_set_user_data(entry_btn, (void*)entry);
 
-                // --- Corrected Event Handler for Clicking a Log Entry Button ---
+                // --- Event handler for clicking a log entry button ---
                 lv_obj_add_event_cb(entry_btn, [](lv_event_t* e) {
-                    LogEntry* log_entry = (LogEntry*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e));
+                    LogEntry* log_entry = (LogEntry*)lv_obj_get_user_data((lv_obj_t *)lv_event_get_target(e));
                     if (!log_entry || log_entry->text.isEmpty()) {
                         DEBUG_PRINT("Invalid log entry data");
                         return;
                     }
 
-                    // Format the timestamp for the message box title
+                    // --- Format the timestamp for the message box title ---
                     struct tm* entry_tm = localtime(&log_entry->timestamp);
-                    char formatted_timestamp[32];
+                    char formatted_timestamp[32]; // Buffer for "YYYY-MM-DD HH:MM:SS AM/PM"
                     strftime(formatted_timestamp, sizeof(formatted_timestamp), "%Y-%m-%d %I:%M:%S %p", entry_tm);
 
-                    // Extract the data part of the log entry
-                    int data_separator_pos = log_entry->text.lastIndexOf(": ");
-                    String entry_data = "";
-                    bool parse_success = false;
-                    if (data_separator_pos != -1) {
-                        entry_data = log_entry->text.substring(data_separator_pos + 2);
-                        entry_data.trim();
-                        if (!entry_data.isEmpty()) {
-                            parse_success = true;
-                            DEBUG_PRINTF("Successfully parsed log data using lastIndexOf: %s\n", entry_data.c_str());
-                        } else {
-                            DEBUG_PRINT("Extracted log data is empty after trim");
-                            entry_data = "(No data)";
-                        }
-                    } else {
-                        DEBUG_PRINT("Could not find data separator ': ' in log entry");
+                    // --- Extract the data part of the log entry ---
+                    // Find the end of the timestamp (second space after the date)
+                    int first_space = log_entry->text.indexOf(' ');
+                    int second_space = -1;
+                    if (first_space != -1) {
+                        second_space = log_entry->text.indexOf(' ', first_space + 1);
+                    }
+                    int third_space = -1;
+                     if (second_space != -1) {
+                        third_space = log_entry->text.indexOf(' ', second_space + 1); // Space after AM/PM
                     }
 
-                    // Create and configure the message box
-                    lv_obj_t* msgbox = lv_msgbox_create(NULL);
-                    lv_obj_set_size(msgbox, 280, 180);
-                    lv_obj_center(msgbox);
-                    lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0);
-                    lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0);
-                    lv_obj_set_style_pad_all(msgbox, 10, 0);
+                    String entry_data = "";
+                    bool parse_success = false; // Flag to track if data extraction worked
 
-                    lv_obj_t* msg_title = lv_msgbox_add_title(msgbox, "Log Entry Details");
-                    String formatted_entry = parse_success ? getFormattedEntry(entry_data) : "Error parsing entry data.";
-                    String full_message = "Time: " + String(formatted_timestamp) + "\n" + formatted_entry;
-                    lv_obj_t* msg_text = lv_msgbox_add_text(msgbox, full_message.c_str());
-                    lv_obj_set_style_text_font(msg_text, &lv_font_montserrat_14, 0);
-                    lv_obj_set_style_text_line_space(msg_text, 2, 0);
+                    // Find the *last* ": " sequence that separates timestamp from data.
+                    int data_separator_pos = log_entry->text.lastIndexOf(": ");
 
-                    lv_obj_t* close_btn = lv_msgbox_add_footer_button(msgbox, "Close");
-
-                    // Corrected Close Button Event Handler
-                    lv_obj_add_event_cb(close_btn, [](lv_event_t* e_close) {
-                        lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_close);
-                        lv_obj_t* footer = lv_obj_get_parent(btn);
-                        lv_obj_t* current_msgbox = lv_obj_get_parent(footer);
-                        if (current_msgbox && lv_obj_is_valid(current_msgbox)) {
-                            lv_msgbox_close(current_msgbox);
-                            DEBUG_PRINT("Log entry message box closed.");
+                    if (data_separator_pos != -1) {
+                        // Extract data after the last ": "
+                        entry_data = log_entry->text.substring(data_separator_pos + 2);
+                        entry_data.trim(); // Clean up whitespace
+                        if (!entry_data.isEmpty()) {
+                            parse_success = true; // Data extracted successfully
+                            DEBUG_PRINTF("Successfully parsed log data using lastIndexOf: %s\n", entry_data.c_str());
+                        } else {
+                            DEBUG_PRINT("Extracted log data is empty after trim (using lastIndexOf)");
+                            entry_data = "(No data)"; // Fallback text
                         }
-                    }, LV_EVENT_CLICKED, NULL);
+                    } else {
+                         DEBUG_PRINT("Could not find data separator ': ' in log entry using lastIndexOf.");
+                         // Keep parse_success = false
+                    }
 
+                    // --- Only create the message box if parsing was successful ---
+                    if (parse_success) {
+                        // --- Call the simplified getFormattedEntry with ONLY the data ---
+                        String formatted_data = getFormattedEntry(entry_data);
+
+                        // --- Combine formatted timestamp and data for the message box ---
+                        String full_message = "Time: " + String(formatted_timestamp) + "\n" + formatted_data;
+
+                        // Create message box (modal by default)
+                        lv_obj_t* msgbox = lv_msgbox_create(NULL); // Parent NULL -> Attach to top layer, creates modal bg
+                        lv_obj_set_size(msgbox, 280, 180);
+                        lv_obj_center(msgbox);
+                        // Style the message box window itself
+                        lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0); // Fully opaque msgbox window
+                        lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0); // Gray background
+                        lv_obj_set_style_pad_all(msgbox, 10, 0); // Padding inside msgbox
+
+                        // Title for the message box
+                        lv_obj_t* msg_title = lv_msgbox_add_title(msgbox, "Log Entry Details");
+
+                        // Text content for the message box
+                        lv_obj_t* msg_text = lv_msgbox_add_text(msgbox, full_message.c_str()); // Use full_message here
+                        lv_obj_set_style_text_font(msg_text, &lv_font_montserrat_14, 0); // Example font
+                        lv_obj_set_style_text_line_space(msg_text, 2, 0);
+
+                        // Add a close button to the message box
+                        lv_obj_t* close_btn = lv_msgbox_add_footer_button(msgbox, "Close");
+
+                        // --- ** CORRECTED Close Button Event Callback ** ---
+                        lv_obj_add_event_cb(close_btn, [](lv_event_t* e_close) {
+                            // Get the message box object itself by navigating up the hierarchy
+                            // Button -> footer -> msgbox
+                            lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_close);
+                            lv_obj_t* footer = lv_obj_get_parent(btn);
+                            lv_obj_t* current_msgbox = lv_obj_get_parent(footer);
+
+                            // Delete the message box. LVGL handles removing the modal background automatically.
+                            if (current_msgbox) {
+                                 lv_msgbox_close(current_msgbox); // Preferred way for msgbox
+                            }
+
+                            // *** NO NEED to manually set parent screen opacity ***
+
+                            lv_task_handler(); // Process the deletion and redraw
+                            DEBUG_PRINT("Log entry message box closed.");
+
+                        }, LV_EVENT_CLICKED, NULL); // No user data needed here anymore for this purpose
+
+                        // lv_obj_move_foreground(msgbox); // msgbox_create(NULL) already puts it on top layer
+                    }
+                    // Removed the dangling 'else' blocks that caused syntax errors.
+                    // Parsing failure messages are handled by the DEBUG_PRINT statements above.
                 }, LV_EVENT_CLICKED, NULL);
-            }
-        }
+            } // End loop through entries
+        } // End else (entries exist)
     }
 
     // --- Back Button ---
@@ -1036,85 +1077,122 @@ void createViewLogsScreen() {
         lv_task_handler();
     }, LV_EVENT_CLICKED, NULL);
 
-    // --- Reset Button with Updated Msgbox for LVGL 9.2.2 ---
+    // --- Reset Button ---
     lv_obj_t* reset_btn = lv_btn_create(logs_screen);
     lv_obj_set_size(reset_btn, 80, 40);
-    lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_RIGHT, -10, 0);
+    lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -5); // Position bottom right
     lv_obj_add_style(reset_btn, &style_btn, 0);
     lv_obj_add_style(reset_btn, &style_btn_pressed, LV_STATE_PRESSED);
+
     lv_obj_t* reset_label = lv_label_create(reset_btn);
     lv_label_set_text(reset_label, "Reset");
     lv_obj_center(reset_label);
-    lv_obj_move_foreground(reset_btn);
+    lv_obj_move_foreground(reset_btn); // Ensure it's above tabview
 
     lv_obj_add_event_cb(reset_btn, [](lv_event_t* e) {
-        // Create message box for confirmation
-        lv_obj_t* msgbox = lv_msgbox_create(NULL); // Modal dialog
-        lv_obj_set_size(msgbox, 250, 150);
-        lv_obj_center(msgbox);
-        lv_obj_set_style_bg_opa(msgbox, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(msgbox, lv_color_hex(0x808080), 0);
+        // --- Confirmation Message Box for Reset ---
+        lv_obj_t* confirm_msgbox = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(confirm_msgbox, "Confirm Reset");
+        lv_msgbox_add_text(confirm_msgbox, "Are you sure you want to reset the log file?");
+        lv_obj_set_style_bg_opa(confirm_msgbox, LV_OPA_COVER, 0); // Opaque box
+        lv_obj_set_style_bg_color(confirm_msgbox, lv_color_hex(0x808080), 0);
 
-        // Add title
-        lv_msgbox_add_title(msgbox, "Confirm Reset");
+        // Add Yes/No buttons individually
+        lv_obj_t* yes_btn = lv_msgbox_add_footer_button(confirm_msgbox, "Yes");
+        lv_obj_t* no_btn = lv_msgbox_add_footer_button(confirm_msgbox, "No");
+        lv_obj_set_width(confirm_msgbox, 250); // Adjust size
+        lv_obj_center(confirm_msgbox);
 
-        // Add message text
-        lv_obj_t* text = lv_msgbox_add_text(msgbox, "Are you sure you want to delete all log entries?");
-        lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, 0);
+        // --- Event Callback for "Yes" Button ---
+        lv_obj_add_event_cb(yes_btn, [](lv_event_t* e_yes) {
+            // Get the message box object itself by navigating up the hierarchy
+            lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_yes);
+            lv_obj_t* footer = lv_obj_get_parent(btn);
+            lv_obj_t* current_confirm_msgbox = lv_obj_get_parent(footer);
 
-        // Add footer buttons with type casting
-        lv_obj_t* no_btn = (lv_obj_t*)lv_msgbox_add_footer_button(msgbox, "No");  // Index 0
-        lv_obj_t* yes_btn = (lv_obj_t*)lv_msgbox_add_footer_button(msgbox, "Yes"); // Index 1
+            // Close confirmation FIRST
+            if (current_confirm_msgbox) {
+                lv_msgbox_close(current_confirm_msgbox);
+            }
+            lv_task_handler(); // Process deletion
 
-        // Event callback for button clicks
-        lv_obj_add_event_cb(msgbox, [](lv_event_t* e) {
-                lv_obj_t* msgbox = (lv_obj_t*)lv_event_get_current_target(e);
-            uint32_t btn_id = *(uint32_t*)lv_event_get_param(e); // Get the clicked button index
-
-            if (btn_id == 1) { // "Yes" button (index 1, since "No" is 0)
-                DEBUG_PRINT("Reset confirmed. Deleting log entries...");
-
-                // Handle SPI and SD operations
-                SPI.end();
-                delay(100);
+            // Perform Reset Logic
+                DEBUG_PRINT("Resetting log file...");
+                SPI.end(); delay(50);
                 SPI_SD.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
-                digitalWrite(SD_SPI_CS_PIN, HIGH);
-                delay(100);
-
+                digitalWrite(SD_SPI_CS_PIN, HIGH); delay(50);
+                bool reset_success = false;
                 if (SD.remove(LOG_FILENAME)) {
                     File file = SD.open(LOG_FILENAME, FILE_WRITE);
                     if (file) {
-                        file.println("# Loss Prevention Log - Reset " + getTimestamp());
+                        file.println("# Log Reset " + getTimestamp());
                         file.close();
-                        DEBUG_PRINT("Log file reset successfully");
+                        reset_success = true;
+                        DEBUG_PRINT("Log file reset successful.");
                     } else {
-                        DEBUG_PRINT("Failed to create new log file after reset");
+                         DEBUG_PRINT("Failed to create new log file after removing old one.");
                     }
                 } else {
-                    DEBUG_PRINT("Failed to delete log file");
+                     DEBUG_PRINT("Failed to remove log file.");
                 }
+                SPI_SD.end(); delay(50);
+                SPI.begin(); pinMode(TFT_DC, OUTPUT); digitalWrite(TFT_DC, HIGH);
 
-                SPI_SD.end();
-                SPI.begin();
-                pinMode(TFT_DC, OUTPUT);
-                digitalWrite(TFT_DC, HIGH);
+                parsedLogEntries.clear(); // Clear in-memory logs
 
-                // Clear log entries and refresh screen
-                parsedLogEntries.clear();
-                lv_obj_t* screen_to_delete = lv_scr_act();
-                createViewLogsScreen();
-                if (screen_to_delete && screen_to_delete != lv_scr_act()) {
-                    lv_obj_delete(screen_to_delete);
-                }
-            } else { // "No" button (index 0)
-                DEBUG_PRINT("Reset cancelled.");
+                // --- Show Success/Failure Message Box ---
+                lv_obj_t* result_msgbox = lv_msgbox_create(NULL);
+                lv_msgbox_add_title(result_msgbox, reset_success ? "Reset Successful" : "Reset Failed");
+                lv_msgbox_add_text(result_msgbox, reset_success ? "Log has been reset." : "Failed to reset log.");
+                lv_obj_set_style_bg_opa(result_msgbox, LV_OPA_COVER, 0);
+                lv_obj_set_style_bg_color(result_msgbox, lv_color_hex(0x808080), 0);
+                const char* ok_btn_txt[] = {"OK", ""};
+                lv_obj_t* ok_btn = lv_msgbox_add_footer_button(result_msgbox, "OK");
+                lv_obj_set_width(result_msgbox, 250);
+                lv_obj_center(result_msgbox);
+
+                // --- Event Callback for "OK" Button on Result MsgBox ---
+                lv_obj_add_event_cb(ok_btn, [](lv_event_t* e_ok) {
+                    // Get the result message box object by navigating up
+                    lv_obj_t* ok_button = (lv_obj_t*)lv_event_get_target(e_ok);
+                    lv_obj_t* res_footer = lv_obj_get_parent(ok_button);
+                    lv_obj_t* current_result_msgbox = lv_obj_get_parent(res_footer);
+
+                    if (current_result_msgbox) {
+                        lv_msgbox_close(current_result_msgbox); // Close this msgbox
+                    }
+
+                    // Refresh the entire log view screen
+                    lv_obj_t* old_screen = lv_scr_act();
+                    createViewLogsScreen(); // Recreate the screen to show empty/new logs
+                    if (old_screen && old_screen != lv_scr_act()) { // Clean up old screen if different
+                         lv_obj_delete(old_screen);
+                    }
+                    lv_task_handler(); // Update UI
+
+                }, LV_EVENT_CLICKED, NULL); // Use LV_EVENT_CLICKED
+
+            // Note: The original 'else if (btn_text && strcmp(btn_text, "No") == 0)' block
+            // is now handled by the separate callback for no_btn below.
+
+        }, LV_EVENT_CLICKED, NULL); // Attach to yes_btn
+
+        // --- Event Callback for "No" Button ---
+        lv_obj_add_event_cb(no_btn, [](lv_event_t* e_no) {
+            // Get the message box object itself by navigating up the hierarchy
+            lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_no);
+            lv_obj_t* footer = lv_obj_get_parent(btn);
+            lv_obj_t* current_confirm_msgbox = lv_obj_get_parent(footer);
+
+            // Just close the confirmation box
+            if (current_confirm_msgbox) {
+                lv_msgbox_close(current_confirm_msgbox);
             }
+            lv_task_handler();
 
-            // Close the message box
-            lv_msgbox_close(msgbox);
-        }, LV_EVENT_VALUE_CHANGED, NULL);
+        }, LV_EVENT_CLICKED, NULL); // Attach to no_btn
 
-    }, LV_EVENT_CLICKED, NULL);
+    }, LV_EVENT_CLICKED, NULL); // End of reset_btn callback
 
     lv_scr_load(logs_screen);
     lv_task_handler();

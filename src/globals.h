@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <M5Unified.h>      // Must be before lvgl
 #include "m5gfx_lvgl.hpp"   // Includes lvgl.h and SemaphoreHandle_t
-#include "lvgl.h"           // Include for full lv_timer_t definition (LVGL v9)
+#include <lvgl.h>        // Include for full lv_timer_t definition (LVGL v9)
 #include <WiFiManager.h>   // Uses background task now
 #include <HTTPClient.h>
 #include <Wire.h>
@@ -111,7 +111,7 @@ LV_IMG_DECLARE(LossPrev2);
 
 // --- Tasking ---
 #define LVGL_TASK_CORE 1
-#define LVGL_TASK_PRIORITY 5
+#define LVGL_TASK_PRIORITY 10 // Increased priority from 5
 #define LVGL_STACK_SIZE 32768
 
 // --- Data Structures ---
