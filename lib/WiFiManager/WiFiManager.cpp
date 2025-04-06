@@ -218,8 +218,32 @@ bool WiFiManager::setNetworkPriority(const String& ssid, int priority) {
     return true;
 }
 
+// Added implementation for forgetNetwork
+bool WiFiManager::forgetNetwork(const String& ssid) {
+    int idx = findNetwork(ssid, _savedNetworks);
+    if (idx < 0) {
+        // Network not found in saved list
+        return false;
+    }
+    // Remove the network from the vector
+    _savedNetworks.erase(_savedNetworks.begin() + idx);
+    
+    // Update the persistent storage
+    saveNetworks(); 
+    
+    // If currently connected to the forgotten network, disconnect
+    if (isConnected() && WiFi.SSID() == ssid) {
+        disconnect(true); // Manual disconnect
+    }
+    
+    notifyStatus("Forgot network: " + ssid);
+    return true;
+}
+
+
 void WiFiManager::loadSavedNetworks() {
     _preferences.begin("wifi_config", false);
+    _savedNetworks.clear(); // Clear vector before loading
     int num = _preferences.getInt("numNetworks", 0);
     for (int i = 0; i < min(num, MAX_SAVED_NETWORKS); i++) {
         char ssidKey[16], passKey[16], prioKey[16];
@@ -251,9 +275,12 @@ void WiFiManager::saveNetworks() {
         _preferences.putInt(prioKey, _savedNetworks[i].priority);
     }
     _preferences.end();
+    sortNetworksByPriority(_savedNetworks); // Ensure loaded networks are sorted
 }
 
 void WiFiManager::notifyStatus(const String& message) {
+    // Add debug logging for status changes
+    // DEBUG_PRINTF("[WiFi Status] State: %s, Msg: %s\n", getStateString().c_str(), message.c_str()); 
     if (_statusCallback) _statusCallback(_state, message);
 }
 

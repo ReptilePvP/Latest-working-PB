@@ -1,93 +1,55 @@
-# Progress: Loss Prevention Log System
+# Progress: Loss Prevention Log System (Updated)
 
 ## Current Status
-- Memory bank initialization in progress
-- Core functionality implemented
-- UI design and implementation complete
-- Basic logging and WiFi features operational
+- Core functionality implemented and operational.
+- UI design and implementation using LVGL v9 complete for existing features.
+- Local logging to SD card functional.
+- WiFi connectivity and time synchronization functional.
+- Device settings (Sound, Brightness, Date/Time, Power) implemented.
+- Memory bank files updated to reflect current codebase (as of 2025-04-06).
 
-## What Works
-1. User Interface
-   - Main menu with card-style design
-   - Gender, color, and item selection screens
-   - Settings menu (WiFi, Sound, Display, Date & Time, Power Management)
-   - Log viewing screen with pagination
-   - WiFi management screen
+## What Works (Based on Code Analysis)
+1.  **User Interface (LVGL v9)**:
+    *   Loading screen with progress bar.
+    *   Lock screen with time display and unlock button.
+    *   Main menu with card-based navigation (New Entry, Logs, Settings, WiFi, Date/Time, Sleep).
+    *   Multi-step incident entry flow (Gender, Apparel, Shirt Color, Pants Type, Pants Color, Shoe Style, Shoe Color, Item, Confirmation).
+    *   Log viewing screen displaying entries from `log.csv`, grouped by day (last 3 days).
+    *   Settings screens for:
+        *   WiFi (Enable/Disable, Scan, Connect, View Saved).
+        *   Sound (Enable/Disable, Volume Slider).
+        *   Display (Brightness Slider, Presets).
+        *   Date & Time (Manual setting via rollers).
+        *   Power Management (Power Off, Restart options with confirmation).
+    *   Deep Sleep mode entry (via Main Menu or Power Management screen).
+2.  **Core Functionality**:
+    *   Incident data collection through UI flow.
+    *   Saving formatted log entries with timestamps to SD card (`log.csv`).
+    *   Loading and parsing log entries for display.
+    *   WiFi connection management (using single-threaded `WiFiManager` in `lib/`).
+    *   NTP time synchronization when WiFi is connected.
+    *   RTC timekeeping as fallback.
+    *   Saving/loading settings (Volume, Brightness, WiFi Enabled state) using `Preferences`.
+    *   Deep sleep wake-up via touch screen interrupt (AW9523 -> GPIO 21).
+3.  **Hardware Integration**:
+    *   M5Stack CoreS3 initialization (Display, Power, Speaker, RTC).
+    *   Touch screen input handling via LVGL driver.
+    *   SD card read/write operations via SPI.
+    *   LVGL rendering offloaded to a dedicated FreeRTOS task.
 
-2. Core Functionality
-   - Loss prevention entry logging
-   - SD card storage for log entries
-   - Real-time clock synchronization (NTP when online, RTC as fallback)
-   - **Refactored WiFi connection management:** Uses a background task (Core 0) for non-blocking scan, connect, disconnect operations, communicating via FreeRTOS queues.
-   - Power management (power off, restart, sleep mode)
+## Known Issues / Areas for Improvement (Inferred)
+-   **WiFi Responsiveness**: Since `WiFiManager` runs in the main loop, lengthy scans or connection attempts *could* potentially cause minor UI lag, although the asynchronous scan (`WiFi.scanNetworks(true)`) helps mitigate this for scanning.
+-   **Log Management**: Log viewing currently shows the last 3 days. No features for searching, filtering, exporting, or deleting individual logs (only full reset). Log file could grow large over time.
+-   **Error Handling**: While basic error handling exists (e.g., SD card, log parsing), robustness could be improved (e.g., WiFi connection failures, file system errors).
+-   **UI/UX**: Some minor potential improvements (e.g., feedback during WiFi connection attempts, clearer indication of saved network status). "Forget Network" functionality is missing.
+-   **Security**: No password protection for settings or log access. Log file is plain text.
 
-3. Data Management
-   - Log entry creation and storage
-   - Log retrieval and display
-   - Date and time management
+## Potential Next Steps (Suggestions)
+1.  **Testing**: Thoroughly test all existing features, especially WiFi connection stability, deep sleep/wake-up, and SD card logging over extended periods.
+2.  **Log Management Features**: Implement log searching, filtering, or export functionality. Consider log rotation or archiving.
+3.  **WiFi Robustness**: Enhance error handling and user feedback during WiFi connection process. Consider implementing the background task for WiFi if UI responsiveness during connection becomes an issue.
+4.  **Security**: Add basic PIN lock or password protection. Consider simple log encryption.
+5.  **Cloud Integration**: Implement webhook sending or explore full cloud sync.
+6.  **Code Refinement**: Review code for potential optimizations (memory, power) and clarity.
 
-4. Hardware Integration
-   - Touch screen input handling
-   - Button input from M5Stack Dual Button & Key unit
-   - SD card read/write operations
-   - Display output via LVGL
-
-## What's Left to Build
-1. Cloud Integration
-   - Implement full cloud synchronization for remote access to logs
-   - Develop user authentication for secure cloud access
-
-2. Advanced Features
-   - Search functionality for log entries
-   - Filtering options for log viewing (by date, gender, item)
-   - Photo capture capability (requires additional hardware)
-
-3. Reporting and Analytics
-   - Implement basic data analysis features
-   - Generate reports based on collected data
-
-4. Security Enhancements
-   - Encrypted log storage
-   - User authentication for local access
-
-5. Performance Optimizations
-   - Further battery life improvements
-   - Memory usage optimizations
-   - UI rendering speed enhancements
-
-## Known Issues
-1. **Refactored WiFiManager needs testing:** The new background task implementation requires thorough testing for stability, responsiveness, connection reliability, and scan performance.
-2. Occasional slow SD card read/write operations for large log files.
-3. Potential for screen burn-in with static UI elements.
-4. Limited support for non-English languages and special characters.
-
-## Next Steps
-1. **Review and Adjust UI (`Loss_Prevention_Log.ino`):** Ensure the main application correctly handles the new `WiFiManager` states (e.g., `WIFI_SCAN_REQUESTED`) and provides appropriate user feedback during pending operations.
-2. **Compile and Test:** Build the project and test the refactored `WiFiManager` functionality thoroughly on the M5Stack CoreS3. Focus on:
-    - UI responsiveness during scans and connection attempts.
-    - Correct status updates and scan results display.
-    - Connection stability and automatic reconnection.
-    - Enabling/disabling WiFi.
-    - Adding/removing networks.
-3. Address any issues found during testing.
-4. Conduct testing of other existing features.
-5. Begin implementation of cloud integration.
-6. Develop and integrate search functionality for logs.
-7. Investigate and implement log encryption.
-8. Optimize battery usage and overall performance.
-9. Expand error handling and system robustness.
-
-
-## Recent Changes
-- Initialized memory bank with core documentation files.
-- Implemented power management features (power off, restart, sleep mode).
-- Added date and time configuration screens.
-- **Major Refactoring of `WiFiManager`:**
-    - Implemented a background FreeRTOS task (Core 0) to handle all WiFi operations (scan, connect, disconnect, status checks).
-    - Utilized FreeRTOS queues for communication between the main UI thread (Core 1) and the WiFi task.
-    - Modified `WiFiManager` public methods to send commands to the task queue.
-    - Updated `WiFiManager::update()` to process results from the task queue and trigger callbacks.
-    - Added new states (`WIFI_SCAN_REQUESTED`, `WIFI_CONNECT_REQUESTED`) to reflect asynchronous operations.
-    - Updated Memory Bank (`activeContext.md`, `systemPatterns.md`, `progress.md`).
-
-This progress report reflects the current state of the Loss Prevention Log System project. It will be updated regularly as development continues and new features are implemented or issues are resolved.
+This progress report reflects the state based on code analysis. Further testing may reveal additional issues or confirm functionality.

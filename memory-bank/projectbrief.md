@@ -1,31 +1,46 @@
-# Project Brief: Loss Prevention Log System for M5Stack CoreS3
+# Project Brief: Loss Prevention Log System (Updated)
 
 ## Overview
-The Loss Prevention Log System is a digital logging system for retail environments, designed to replace traditional paper-based methods. It uses the M5Stack CoreS3 hardware to provide a quick and efficient way for store employees to log theft incidents.
+The Loss Prevention Log System is a digital logging tool for retail environments, running on M5Stack CoreS3 hardware. It aims to replace paper-based methods, providing an efficient way for employees to record theft incidents via a touch interface.
 
 ## Goals
-- Improve efficiency in logging theft incidents
-- Enhance data consistency and accuracy
-- Streamline the process of recording loss prevention data
+- Improve efficiency and accuracy in logging theft incidents.
+- Provide a user-friendly touch interface for data entry.
+- Ensure reliable local storage of log data.
+- Enable basic device management features (time sync, power).
 
 ## Scope
-- M5Stack CoreS3 based device
-- Touch interface for user input
-- SD card storage for local data retention
-- WiFi connectivity for time synchronization and potential future features
+- **Hardware**: M5Stack CoreS3.
+- **Interface**: Touch-based GUI built with LVGL v9.
+- **Storage**: Local storage on SD card.
+- **Connectivity**: WiFi for time synchronization (NTP) and potentially future features (e.g., webhooks).
+- **Functionality**: Incident logging (gender, apparel, color, item), log viewing, device settings (WiFi, sound, brightness, date/time, power).
 
-## Key Features
-- Intuitive touch-based user interface with card-style design
-- Gender and item selection
-- Color selection for clothing (shirts, pants, shoes)
-- Local storage on SD card
-- WiFi connectivity for time synchronization
-- Formatted entry logging with timestamps
-- Power management settings (power off, restart, sleep mode)
-- Date and time configuration
-- WiFi network management with visual feedback
+## Key Features (Implemented)
+- **UI**:
+    - Loading and Lock screens.
+    - Main menu with card-style navigation.
+    - Multi-step incident entry flow (Gender -> Apparel Type -> Shirt Color -> Pants Type -> Pants Color -> Shoe Style -> Shoe Color -> Item -> Confirmation).
+    - Log viewing screen with entries grouped by day (last 3 days).
+    - Settings menu for WiFi, Sound, Display (Brightness), Date & Time, Power Management.
+    - WiFi management screen (scan, connect via password entry, view saved networks - *forget network not implemented*).
+- **Logging**:
+    - Saves formatted log entries with timestamps to SD card (`log.csv`).
+    - Parses and displays logs.
+- **Connectivity**:
+    - WiFi scanning and connection (WPA/WPA2).
+    - Saves known networks using Preferences.
+    - Automatic connection attempts to best/saved network.
+    - Time synchronization via NTP when connected.
+    - Basic webhook functionality (`sendWebhook`).
+- **Device Management**:
+    - RTC for timekeeping (fallback when offline).
+    - Manual Date & Time setting via UI.
+    - Sound enable/disable and volume control.
+    - Display brightness control.
+    - Power options: Restart, Power Off, Deep Sleep (wake via touch).
+    - Persistent settings storage using `Preferences`.
 
 ## Hardware Requirements
 - M5Stack CoreS3
-- M5Stack Dual Button & Key Unit
 - SD Card for storage

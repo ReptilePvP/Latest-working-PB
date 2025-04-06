@@ -8,7 +8,7 @@
 
 // Forward declarations for static event handlers used before definition
 static void connect_btn_event_cb(lv_event_t* e);
-static void forget_btn_event_cb(lv_event_t* e);
+static void forget_btn_event_cb(lv_event_t* e); // Ensure this forward declaration exists
 static void power_management_msgbox_event_cb(lv_event_t* e); // Renamed
 static void reset_confirm_event_cb(lv_event_t* e);
 // Add other forward declarations if needed (e.g., for date/time rollers)
@@ -558,29 +558,67 @@ void createMainMenu() {
         createDateSelectionScreen();
     }, LV_EVENT_CLICKED, NULL);
 
-    // Card 6: Reset (Row 2, Col 1)
-    lv_obj_t* reset_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(reset_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
-    lv_obj_add_style(reset_card, &style_card_action, 0);
-    lv_obj_add_style(reset_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* reset_icon = lv_label_create(reset_card);
-    lv_label_set_text(reset_icon, LV_SYMBOL_WARNING); // Warning icon
-    lv_obj_set_style_text_font(reset_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(reset_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* reset_label = lv_label_create(reset_card);
-    lv_label_set_text(reset_label, "Reset");
-    lv_obj_align(reset_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(reset_card, [](lv_event_t* e) {
-        // Create confirmation message box
-        lv_obj_t* msgbox = lv_msgbox_create(NULL);
-        lv_msgbox_add_title(msgbox, "Confirm Reset");
-        lv_msgbox_add_text(msgbox, "Are you sure you want to reset all settings and logs?");
-        // v9: Add footer buttons
-        lv_msgbox_add_footer_button(msgbox, "Cancel"); // ID 0
-        lv_msgbox_add_footer_button(msgbox, "Reset");  // ID 1
-        lv_obj_center(msgbox);
-        lv_obj_add_event_cb(msgbox, reset_confirm_event_cb, LV_EVENT_VALUE_CHANGED, NULL); // Use named callback
+    // Card 6: Sleep (Row 2, Col 1) - Replaces Reset
+    lv_obj_t* sleep_card = lv_obj_create(grid);
+    lv_obj_set_grid_cell(sleep_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
+    lv_obj_add_style(sleep_card, &style_card_action, 0);
+    lv_obj_add_style(sleep_card, &style_card_pressed, LV_STATE_PRESSED);
+    lv_obj_t* sleep_icon = lv_label_create(sleep_card);
+    lv_label_set_text(sleep_icon, LV_SYMBOL_EYE_CLOSE); // Sleep/Eye icon
+    lv_obj_set_style_text_font(sleep_icon, &lv_font_montserrat_20, 0);
+    lv_obj_align(sleep_icon, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_t* sleep_label = lv_label_create(sleep_card);
+    lv_label_set_text(sleep_label, "Sleep");
+    lv_obj_align(sleep_label, LV_ALIGN_BOTTOM_MID, 0, -8);
+    // Replace light sleep with deep sleep implementation based on user feedback and example
+    lv_obj_add_event_cb(sleep_card, [](lv_event_t* e) {
+        // Create sleep screen
+        lv_obj_t* sleep_screen = lv_obj_create(NULL);
+        lv_obj_add_style(sleep_screen, &style_screen, 0); // Use existing screen style
+        lv_scr_load(sleep_screen); // Load the temporary screen
+
+        lv_obj_t* sleep_label = lv_label_create(sleep_screen);
+        lv_label_set_text(sleep_label, "Entering sleep mode...\nTouch screen to wake");
+        // Use a standard font if lv_font_montserrat_24 is not defined or too large
+        lv_obj_set_style_text_font(sleep_label, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(sleep_label, lv_color_white(), 0); // Ensure text is visible
+        lv_obj_align(sleep_label, LV_ALIGN_CENTER, 0, 0);
+        lv_task_handler(); // Update display to show the message
+        delay(2000); // Wait for 2 seconds
+
+        // Prepare for deep sleep (based on M5CoreS3 wakeup example)
+        DEBUG_PRINT("Configuring AW9523 and GPIO for deep sleep wake...");
+        // INTEN_P0 TF_DETECT ES7210 EN[0] DIS[1]
+        M5.In_I2C.writeRegister8(AW9523_ADDR, 0x06, 0b11111111, 100000L);
+        // INTEN_P1 AW88298 FT6336 EN[0] DIS[1] Clear INT
+        // Disable interrupt for FT6336 (Touch) on P1.2 to prevent immediate wake? No, keep enabled.
+        // Clear any pending interrupts by reading input registers
+        M5.In_I2C.writeRegister8(AW9523_ADDR, 0x07, 0b11111011, 100000L); // Ensure P1.2 (Touch INT) interrupt is enabled
+        M5.In_I2C.readRegister8(AW9523_ADDR, 0x00, 100000L); // Read P0 input
+        M5.In_I2C.readRegister8(AW9523_ADDR, 0x01, 100000L); // Read P1 input (clears INT)
+
+        // Configure GPIO 21 (connected to AW9523 INT) as wakeup source
+        pinMode(GPIO_NUM_21, INPUT_PULLUP); // Use pullup for the interrupt line
+
+        // GPIO21 <- AW9523 INT <- AW9523 P1.2 <- Touch INT
+        // Wake up when GPIO 21 goes LOW (level 0)
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_21, 0);
+        DEBUG_PRINT("EXT0 wakeup enabled on GPIO 21 (LOW level)");
+
+        // Put display to sleep
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Lcd.sleep();
+        M5.Lcd.waitDisplay();
+        DEBUG_PRINT("Display asleep. Entering deep sleep...");
+
+        // Enter deep sleep
+        esp_deep_sleep_start();
+
+        // --- Code below this line will not execute after deep sleep ---
+        // The device restarts from the beginning after waking from deep sleep.
+
     }, LV_EVENT_CLICKED, NULL);
+
 
     // Add Status Bar
     addStatusBar(main_menu_screen);
@@ -3176,7 +3214,7 @@ void createNetworkDetailsScreen(const String& ssid) {
     char* ssid_cstr_connect = strdup(ssid.c_str());
     if (ssid_cstr_connect) {
         lv_obj_set_user_data(connect_btn, (void*)ssid_cstr_connect);
-        lv_obj_add_event_cb(connect_btn, connect_btn_event_cb, LV_EVENT_CLICKED, NULL); // Pass NULL, get data in callback
+    lv_obj_add_event_cb(connect_btn, connect_btn_event_cb, LV_EVENT_CLICKED, NULL); // Pass NULL, get data in callback
          // Add delete callback for connect button user data
         lv_obj_add_event_cb(connect_btn, [](lv_event_t* e_del){
             // Explicitly cast the target to lv_obj_t* for lv_obj_get_user_data
@@ -3187,26 +3225,35 @@ void createNetworkDetailsScreen(const String& ssid) {
          DEBUG_PRINT("Failed to allocate memory for connect button SSID");
     }
 
-
-    // Forget Button (Requires library support - keep commented)
-    /*
+    // Forget Button
     lv_obj_t* forget_btn = lv_btn_create(container);
-    // ... (styling) ...
+    lv_obj_set_size(forget_btn, 140, 50);
+    lv_obj_align(forget_btn, LV_ALIGN_TOP_MID, 0, 80); // Position below connect
+    lv_obj_add_style(forget_btn, &style_btn, 0);
+    lv_obj_set_style_bg_color(forget_btn, lv_color_hex(0xE74C3C), 0); // Red color for forget
+    lv_obj_add_style(forget_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* forget_label = lv_label_create(forget_btn);
+    lv_label_set_text(forget_label, "Forget");
+    lv_obj_center(forget_label);
+    // Pass SSID to forget button callback using strdup
     char* ssid_cstr_forget = strdup(ssid.c_str());
     if (ssid_cstr_forget) {
         lv_obj_set_user_data(forget_btn, (void*)ssid_cstr_forget);
-        lv_obj_add_event_cb(forget_btn, forget_btn_event_cb, LV_EVENT_CLICKED, NULL);
-         lv_obj_add_event_cb(forget_btn, [](lv_event_t* e_del){
+        lv_obj_add_event_cb(forget_btn, forget_btn_event_cb, LV_EVENT_CLICKED, NULL); // Use named callback
+         // Add delete callback for forget button user data
+        lv_obj_add_event_cb(forget_btn, [](lv_event_t* e_del){
             char* data_to_free = (char*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e_del)); // v9 cast
             if(data_to_free) free(data_to_free);
         }, LV_EVENT_DELETE, NULL);
+    } else {
+         DEBUG_PRINT("Failed to allocate memory for forget button SSID");
     }
-    */
+
 
     // Cancel Button (Alternative to Back, or use Back button in header)
     lv_obj_t* cancel_btn = lv_btn_create(container);
     lv_obj_set_size(cancel_btn, 140, 50);
-    lv_obj_align(cancel_btn, LV_ALIGN_TOP_MID, 0, 80); // Positioned below connect
+    lv_obj_align(cancel_btn, LV_ALIGN_TOP_MID, 0, 140); // Positioned below forget
     lv_obj_add_style(cancel_btn, &style_btn, 0);
     lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0x6c757d), 0); // Gray color
     lv_obj_add_style(cancel_btn, &style_btn_pressed, LV_STATE_PRESSED);
@@ -3296,6 +3343,7 @@ static void connect_btn_event_cb(lv_event_t* e) {
     // It will be freed when the button itself is deleted via the LV_EVENT_DELETE callback.
 }
 
+// Implementation of the static callback function for the Forget button
 static void forget_btn_event_cb(lv_event_t* e) {
      // Explicitly cast target to lv_obj_t* for lv_obj_get_user_data, then cast result to char*
      char* ssid_cstr = (char*)lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e));
@@ -3328,12 +3376,9 @@ static void forget_btn_event_cb(lv_event_t* e) {
 
              if (captured_ssid) { // Check if SSID data is valid
                  if (btn_id == 1) { // Check if "Forget" button (ID 1) was clicked
-                 // ** This requires a function like wifiManager.forgetNetwork(captured_ssid); **
-                 // ** which is NOT standard in ESP32 WiFi or typical WiFiManager libraries. **
-                 // ** Assuming such a function exists for demonstration: **
-                 // bool success = wifiManager.forgetNetwork(captured_ssid);
-                 bool success = false; // Placeholder - Assume failure as function likely doesn't exist
-                 DEBUG_PRINTF("Attempted to forget %s - Success: %d (Placeholder - Functionality likely missing)\n", captured_ssid, success);
+                     // Call the actual forgetNetwork function
+                     bool success = wifiManager.forgetNetwork(captured_ssid); 
+                     DEBUG_PRINTF("Called wifiManager.forgetNetwork(%s) - Success: %d\n", captured_ssid, success);
 
                  // Create result message box
                  lv_obj_t* result_msgbox = lv_msgbox_create(NULL);

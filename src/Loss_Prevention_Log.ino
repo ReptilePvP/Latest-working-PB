@@ -113,6 +113,11 @@ void setup() {
     }
     setSystemTimeFromRTC(); // Function is now in time_utils.cpp
 
+    // --- WiFi Initialization ---
+    // Explicitly disable ESP32 WiFi auto-reconnect before starting WiFiManager
+    WiFi.setAutoReconnect(false);
+    DEBUG_PRINT("WiFi Auto-Reconnect Disabled.");
+
     // Initialize WiFi Manager
     // Callbacks are now defined in wifi_handler.cpp
     wifiManager.setStatusCallback(onWiFiStatus);

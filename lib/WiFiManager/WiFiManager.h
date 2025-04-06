@@ -60,6 +60,7 @@ public:
     bool addNetwork(const String& ssid, const String& password, int priority = 0);
     bool removeNetwork(const String& ssid);
     bool setNetworkPriority(const String& ssid, int priority);
+    bool forgetNetwork(const String& ssid); // Added forget function
     std::vector<NetworkInfo> getSavedNetworks() const;
     void saveNetworks();
     void loadSavedNetworks();
