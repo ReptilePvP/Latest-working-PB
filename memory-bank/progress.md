@@ -16,7 +16,7 @@
     *   Multi-step incident entry flow (Gender, Apparel, Shirt Color, Pants Type, Pants Color, Shoe Style, Shoe Color, Item, Confirmation).
     *   Log viewing screen displaying entries from `log.csv`, grouped by day (last 3 days).
     *   Settings screens for:
-        *   WiFi (Enable/Disable, Scan, Connect, View Saved).
+        *   WiFi (Enable/Disable, Scan, Connect to New, View Saved, **Connect to Saved**, **Disconnect**, **Forget Saved**).
         *   Sound (Enable/Disable, Volume Slider).
         *   Display (Brightness Slider, Presets).
         *   Date & Time (Manual setting via rollers).
@@ -26,7 +26,7 @@
     *   Incident data collection through UI flow.
     *   Saving formatted log entries with timestamps to SD card (`log.csv`).
     *   Loading and parsing log entries for display.
-    *   WiFi connection management (using single-threaded `WiFiManager` in `lib/`).
+    *   WiFi connection management (using single-threaded `WiFiManager` in `lib/`, including connect, disconnect, forget, save/load from Preferences).
     *   NTP time synchronization when WiFi is connected.
     *   RTC timekeeping as fallback.
     *   Saving/loading settings (Volume, Brightness, WiFi Enabled state) using `Preferences`.
@@ -41,11 +41,11 @@
 -   **WiFi Responsiveness**: Since `WiFiManager` runs in the main loop, lengthy scans or connection attempts *could* potentially cause minor UI lag, although the asynchronous scan (`WiFi.scanNetworks(true)`) helps mitigate this for scanning.
 -   **Log Management**: Log viewing currently shows the last 3 days. No features for searching, filtering, exporting, or deleting individual logs (only full reset). Log file could grow large over time.
 -   **Error Handling**: While basic error handling exists (e.g., SD card, log parsing), robustness could be improved (e.g., WiFi connection failures, file system errors).
--   **UI/UX**: Some minor potential improvements (e.g., feedback during WiFi connection attempts, clearer indication of saved network status). "Forget Network" functionality is missing.
+-   **UI/UX**: Some minor potential improvements (e.g., clearer indication of saved network status).
 -   **Security**: No password protection for settings or log access. Log file is plain text.
 
 ## Potential Next Steps (Suggestions)
-1.  **Testing**: Thoroughly test all existing features, especially WiFi connection stability, deep sleep/wake-up, and SD card logging over extended periods.
+1.  **Testing**: Thoroughly test the new WiFi management features (Connect/Disconnect/Forget from saved list) and other existing features, especially deep sleep/wake-up, and SD card logging over extended periods.
 2.  **Log Management Features**: Implement log searching, filtering, or export functionality. Consider log rotation or archiving.
 3.  **WiFi Robustness**: Enhance error handling and user feedback during WiFi connection process. Consider implementing the background task for WiFi if UI responsiveness during connection becomes an issue.
 4.  **Security**: Add basic PIN lock or password protection. Consider simple log encryption.

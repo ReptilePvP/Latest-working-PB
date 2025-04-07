@@ -1,12 +1,25 @@
-# Active Context: Loss Prevention Log System (Updated 2025-04-06)
+# Active Context: Loss Prevention Log System (Updated 2025-04-07)
 
 ## Current Focus
-- **Documentation Refresh**: Completed analysis of the current codebase (`src/`, `lib/`, `platformio.ini`) and updated all files within the `memory-bank/` directory to accurately reflect the project's state as of 2025-04-06.
-- **Discrepancy Noted**: Identified that the previous `activeContext.md` and `systemPatterns.md` described a refactored `WiFiManager` with a background task, which is *not* present in the current code (`lib/WiFiManager/`). The documentation now reflects the existing single-threaded implementation.
+- **WiFi Management UI**: Implemented UI enhancements in `src/ui.cpp` (`createWiFiManagerScreen`) to allow users to manually connect to, disconnect from, and forget saved WiFi networks.
 
 ## Recent Changes (This Session)
-- Read `platformio.ini`.
-- Read `src/Loss_Prevention_Log.ino`.
+- Read Memory Bank files (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `progress.md`).
+- Read `lib/WiFiManager/WiFiManager.h`.
+- Read `lib/WiFiManager/WiFiManager.cpp`.
+- Read `src/ui.cpp`.
+- Modified `src/ui.cpp`:
+    - Added "Disconnect" button to `createWiFiManagerScreen`.
+    - Added action menu (Connect/Forget/Cancel) for saved network list items in `createWiFiManagerScreen`.
+    - Implemented event callbacks (`saved_network_action_cb`, `saved_network_connect_action`, `saved_network_forget_action`) to handle these actions using existing `WiFiManager` functions.
+    - Fixed compiler error related to `lv_obj_align_to`.
+- Updated this file (`memory-bank/activeContext.md`).
+
+## Next Steps (Based on Updated `progress.md`)
+1.  **Testing**: Perform thorough testing of the new WiFi management features (Connect, Disconnect, Forget from `createWiFiManagerScreen`). Also test existing features documented in `progress.md`, focusing on WiFi, deep sleep, and SD logging stability.
+2.  **Documentation**: Update remaining memory bank files (`projectbrief.md`, `progress.md`, `systemPatterns.md`, `techContext.md`) to reflect the new WiFi management capabilities.
+3.  **Feature Development/Refinement**: Address items listed in "Known Issues / Areas for Improvement" or "Potential Next Steps" in `progress.md` based on project priorities (e.g., log management, security, WiFi robustness).
+4.  **MCP Integration**: Revisit the original goal of integrating the `memory` and `sequentialthinking` MCP servers now that the project documentation is synchronized with the code. This could involve:
 - Read `src/ui.h` and `src/ui.cpp`.
 - Read `lib/WiFiManager/WiFiManager.h` and `lib/WiFiManager/WiFiManager.cpp`.
 - Read `src/wifi_handler.h`.

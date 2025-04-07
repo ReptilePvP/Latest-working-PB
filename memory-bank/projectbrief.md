@@ -23,7 +23,7 @@ The Loss Prevention Log System is a digital logging tool for retail environments
     - Multi-step incident entry flow (Gender -> Apparel Type -> Shirt Color -> Pants Type -> Pants Color -> Shoe Style -> Shoe Color -> Item -> Confirmation).
     - Log viewing screen with entries grouped by day (last 3 days).
     - Settings menu for WiFi, Sound, Display (Brightness), Date & Time, Power Management.
-    - WiFi management screen (scan, connect via password entry, view saved networks - *forget network not implemented*).
+    - WiFi management screen (scan, connect via password entry, view saved networks, **connect to saved**, **disconnect**, **forget saved**).
 - **Logging**:
     - Saves formatted log entries with timestamps to SD card (`log.csv`).
     - Parses and displays logs.

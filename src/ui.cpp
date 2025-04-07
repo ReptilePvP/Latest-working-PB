@@ -11,6 +11,9 @@ static void connect_btn_event_cb(lv_event_t* e);
 static void forget_btn_event_cb(lv_event_t* e); // Ensure this forward declaration exists
 static void power_management_msgbox_event_cb(lv_event_t* e); // Renamed
 static void reset_confirm_event_cb(lv_event_t* e);
+static void saved_network_action_cb(lv_event_t* e); // <-- ADDED for saved network action menu
+static void saved_network_connect_action(lv_event_t* e); // <-- ADDED for connect action
+static void saved_network_forget_action(lv_event_t* e); // <-- ADDED for forget action
 // Add other forward declarations if needed (e.g., for date/time rollers)
 static void on_year_change(lv_event_t* e);
 static void on_month_change(lv_event_t* e);
@@ -2506,7 +2509,59 @@ void createSoundSettingsScreen() {
     volume_value_label = lv_label_create(sound_settings_screen);
     char volume_text[10];
     snprintf(volume_text, sizeof(volume_text), "%d", M5.Speaker.getVolume()); // Use current actual volume
-} // End of createSoundSettingsScreen
+    lv_label_set_text(volume_value_label, volume_text);
+    lv_obj_align_to(volume_value_label, volume_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0); // Align next to "Volume" label
+    lv_obj_add_style(volume_value_label, &style_text, 0);
+
+    lv_obj_t* volume_slider = lv_slider_create(sound_settings_screen);
+    lv_obj_set_width(volume_slider, 200); // Adjust width
+    lv_obj_align(volume_slider, LV_ALIGN_TOP_MID, 0, 160); // Position below label/value
+    lv_slider_set_range(volume_slider, 0, 255);
+    lv_slider_set_value(volume_slider, M5.Speaker.getVolume(), LV_ANIM_OFF); // Set initial value
+
+    // Slider event callback
+    lv_obj_add_event_cb(volume_slider, [](lv_event_t* e) {
+        lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e);
+        uint8_t volume = lv_slider_get_value(slider);
+        M5.Speaker.setVolume(volume);
+        // Update the value label
+        if (volume_value_label && lv_obj_is_valid(volume_value_label)) {
+            lv_label_set_text_fmt(volume_value_label, "%d", volume);
+        }
+        // Save volume to preferences
+        Preferences prefs_cb;
+        prefs_cb.begin("settings", false);
+        prefs_cb.putUChar("volume", volume);
+        prefs_cb.end();
+        // Play a short tone on change if sound is enabled
+        if (prefs_cb.getBool("sound_enabled", true)) {
+             M5.Speaker.tone(660, 50); // Play short tone
+        }
+    }, LV_EVENT_VALUE_CHANGED, NULL);
+
+    // Back Button
+    lv_obj_t* back_btn = lv_btn_create(sound_settings_screen);
+    lv_obj_set_size(back_btn, 100, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10); // Position at bottom center
+    lv_obj_add_style(back_btn, &style_btn, 0);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x6c757d), 0); // Gray color
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
+        lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+        lv_obj_t* current_screen = lv_obj_get_screen(btn);
+        createSettingsScreen(); // Go back to main settings
+        if (current_screen && lv_obj_is_valid(current_screen)) {
+            lv_obj_del_async(current_screen);
+            sound_settings_screen = nullptr; // Clear static pointer
+        }
+    }, LV_EVENT_CLICKED, NULL);
+
+    lv_scr_load(sound_settings_screen); // Load the screen
+    DEBUG_PRINT("Sound settings screen loaded");
+} // <<< ENSURE THIS CLOSING BRACE IS PRESENT
 
 
 void createBrightnessSettingsScreen() {
@@ -2930,7 +2985,7 @@ void createWiFiManagerScreen() {
         if (wifiEnabled) { // Check global flag
             lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
             createWiFiScreen(); // Go to scan results screen
-             if (current_screen && lv_obj_is_valid(current_screen)) {
+            if (current_screen && lv_obj_is_valid(current_screen)) {
                 lv_obj_del_async(current_screen);
                 wifi_manager_screen = nullptr;
             }
@@ -2969,6 +3024,35 @@ void createWiFiManagerScreen() {
     lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x3A3A3A), 0); // List background
     lv_obj_set_style_pad_all(saved_networks_list_widget, 5, 0);
 
+    // --- ADDED: Disconnect Button ---
+    lv_obj_t* disconnect_btn = lv_btn_create(wifi_manager_screen);
+    lv_obj_set_size(disconnect_btn, 100, 40);
+    // lv_obj_align_to(disconnect_btn, scan_btn, LV_ALIGN_OUT_RIGHT_MID, 10, 0); // Original attempt causing compiler error
+    lv_obj_align(disconnect_btn, LV_ALIGN_TOP_LEFT, 220, 110); // Align relative to parent based on scan_btn position (scan_btn aligned TOP_MID, 0, 110)
+    lv_obj_add_style(disconnect_btn, &style_btn, 0);
+    lv_obj_set_style_bg_color(disconnect_btn, lv_color_hex(0xE74C3C), 0); // Red color
+    lv_obj_add_style(disconnect_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* disconnect_label = lv_label_create(disconnect_btn);
+    lv_label_set_text(disconnect_label, "Disconnect");
+    lv_obj_center(disconnect_label);
+    lv_obj_set_style_text_color(disconnect_label, lv_color_hex(0xFFFFFF), 0);
+
+    // Show/Hide disconnect button based on current status
+    if (!wifiManager.isConnected()) {
+        lv_obj_add_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    lv_obj_add_event_cb(disconnect_btn, [](lv_event_t* e) {
+        DEBUG_PRINT("Disconnect button pressed.");
+        wifiManager.disconnect(true); // Call disconnect
+        // Hide the button after disconnecting
+        lv_obj_add_flag((lv_obj_t*)lv_event_get_target(e), LV_OBJ_FLAG_HIDDEN);
+        // Optionally, refresh the screen or update status labels via callback
+        updateStatusBar(); // Update status bar immediately
+    }, LV_EVENT_CLICKED, NULL);
+    // --- END ADDED: Disconnect Button ---
+
+
     // Populate saved networks list
     std::vector<NetworkInfo> savedNetworks = wifiManager.getSavedNetworks();
     DEBUG_PRINTF("Found %d saved networks.\n", savedNetworks.size());
@@ -2982,47 +3066,23 @@ void createWiFiManagerScreen() {
         for (const auto& net : savedNetworks) {
             lv_obj_t* btn = lv_list_add_btn(saved_networks_list_widget, LV_SYMBOL_SETTINGS, net.ssid.c_str()); // Use settings icon for now
 
-            // Store SSID and password (if available) in user data
-            // IMPORTANT: Need a way to manage this memory. Using strdup requires freeing later.
-            // For simplicity now, just store SSID. Password handling needed for connect.
+            // Store a *copy* of the SSID string in user data using strdup
             char* ssid_copy = strdup(net.ssid.c_str());
             if (ssid_copy) {
-                lv_obj_set_user_data(btn, (void*)ssid_copy);
+                lv_obj_set_user_data(btn, (void*)ssid_copy); // Store the copied C-string pointer
 
-                // Add event callback for the button
-                lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-                    // Corrected: Get user data from the event itself
-                    char* stored_ssid = (char*)lv_event_get_user_data(e);
-                    if (stored_ssid) {
-                        DEBUG_PRINTF("Saved network selected: %s\n", stored_ssid);
-                        // TODO: Implement action menu (Connect, Forget, Priority, Cancel)
-                        // For now, just show a temporary message box
-                        lv_obj_t* msgbox = lv_msgbox_create(NULL);
-                        lv_msgbox_add_title(msgbox, stored_ssid);
-                        lv_msgbox_add_text(msgbox, "Actions (Connect/Forget) not yet implemented.");
-                        lv_msgbox_add_footer_button(msgbox, "OK");
-                        lv_obj_center(msgbox);
-                        // --- ADDED: Attach click handler to the main item container ---
-                        // --- ADDED FOR DEBUGGING ---
-                        lv_obj_t* target_btn_dbg = static_cast<lv_obj_t*>(lv_event_get_target(e));
-                        lv_obj_t* parent_cont_dbg = lv_obj_get_parent(target_btn_dbg);
-                        Serial.printf("[DEBUG] Inside lambda: stored_ssid = '%s'\n", stored_ssid ? stored_ssid : "NULL");
-                        Serial.printf("[DEBUG] Inside lambda: target_btn = %p\n", (void*)target_btn_dbg);
-                        Serial.printf("[DEBUG] Inside lambda: parent_cont = %p\n", (void*)parent_cont_dbg);
-                        // --- END ADDED FOR DEBUGGING ---
-                        // DEBUG_PRINT("Attaching click handler for SSID: %s to item_cont %p\n", ssid.c_str(), item_cont); // Temporarily commented out for debugging
-                        // lv_obj_add_flag(...); // Temporarily commented out for debugging
-                        // lv_obj_add_event_cb(...); // Temporarily commented out for debugging
-                        // --- END ADDED ---
+                // Add event callback for the button - Use the new action callback
+                lv_obj_add_event_cb(btn, saved_network_action_cb, LV_EVENT_CLICKED, NULL);
 
-                        lv_obj_add_event_cb(msgbox, [](lv_event_t* e_msg) {
-                             // Auto-closes in v9
-                        }, LV_EVENT_VALUE_CHANGED, NULL);
+                // Add delete callback to free the strdup'd memory when the button is deleted
+                lv_obj_add_event_cb(btn, [](lv_event_t* e_del) {
+                    lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
+                    char* data_to_free = (char*)lv_obj_get_user_data(target_btn);
+                    if (data_to_free) {
+                        free(data_to_free);
+                        DEBUG_PRINT("Freed SSID user data for list button.\n");
                     }
-                }, LV_EVENT_CLICKED, NULL);
-
-                // Add delete callback using the named function
-                lv_obj_add_event_cb(btn, saved_network_delete_cb, LV_EVENT_DELETE, NULL);
+                }, LV_EVENT_DELETE, NULL);
 
             } else {
                 DEBUG_PRINT("Failed to allocate memory for saved network SSID copy");
@@ -3036,30 +3096,241 @@ void createWiFiManagerScreen() {
     DEBUG_PRINT("WiFi Manager screen loaded");
 }
 
-// --- ADDED: Event handler for clicking a saved network item ---
-static void saved_network_item_click_cb(lv_event_t* e) {
-    lv_obj_t* item_cont = (lv_obj_t*)lv_event_get_target(e);
-    char* ssid_cstr = (char*)lv_event_get_user_data(e);
 
-    if (!ssid_cstr) {
-        DEBUG_PRINT("Error: SSID data missing in saved network click event.");
+// --- ADDED: Event handler for clicking a saved network item ---
+static void saved_network_action_cb(lv_event_t* e) {
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    // Retrieve the user data as the correct type: char* (C-string SSID)
+    char* ssid_cstr = (char*)lv_obj_get_user_data(btn);
+
+    // --- ADDED: Null check for retrieved SSID ---
+    if (!ssid_cstr || strlen(ssid_cstr) == 0) {
+        DEBUG_PRINT("Error: Invalid or empty SSID pointer in saved network click event.");
+        return;
+    }
+    // --- END ADDED ---
+
+    // Use the retrieved C-string directly
+    DEBUG_PRINTF("Saved network '%s' selected. Showing actions...\n", ssid_cstr);
+
+    // Create a message box for actions
+    lv_obj_t* mbox = lv_msgbox_create(NULL); // Create on top layer
+    lv_msgbox_add_title(mbox, ssid_cstr); // Use the C-string for the title
+    // Add text or leave empty
+    // lv_msgbox_add_text(mbox, "Select an action:");
+
+    // Add buttons for actions
+    lv_obj_t* connect_btn_mbox = lv_msgbox_add_footer_button(mbox, "Connect");
+    lv_obj_t* forget_btn_mbox = lv_msgbox_add_footer_button(mbox, "Forget");
+    lv_obj_t* cancel_btn_mbox = lv_msgbox_add_footer_button(mbox, "Cancel");
+
+    lv_obj_center(mbox);
+
+    // Store a *copy* of the SSID C-string in the message box's user data
+    // This ensures the data persists even if the original button is deleted before an action is chosen.
+    char* ssid_copy_mbox = strdup(ssid_cstr);
+    if (!ssid_copy_mbox) {
+        DEBUG_PRINT("Error: Failed to allocate memory for SSID copy in action msgbox!");
+        lv_msgbox_close(mbox); // Close the message box if allocation fails
+        return;
+    }
+    lv_obj_set_user_data(mbox, (void*)ssid_copy_mbox);
+
+    // Add a delete event to the message box itself to free the copied SSID
+    lv_obj_add_event_cb(mbox, [](lv_event_t* e_del) {
+        lv_obj_t* target_mbox = (lv_obj_t*)lv_event_get_target(e_del);
+        char* data_to_free = (char*)lv_obj_get_user_data(target_mbox);
+        if (data_to_free) {
+            free(data_to_free);
+            DEBUG_PRINT("Freed SSID user data for action msgbox via DELETE event.\n");
+        }
+    }, LV_EVENT_DELETE, NULL);
+
+
+    // Add event callbacks for the message box buttons
+    lv_obj_add_event_cb(connect_btn_mbox, saved_network_connect_action, LV_EVENT_CLICKED, NULL); // Callbacks will now retrieve char*
+    lv_obj_add_event_cb(forget_btn_mbox, saved_network_forget_action, LV_EVENT_CLICKED, NULL);
+
+    // Cancel button just closes the message box (handled automatically by lv_msgbox)
+    lv_obj_add_event_cb(cancel_btn_mbox, [](lv_event_t* e_cancel) {
+        lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e_cancel);
+        lv_obj_t* mbox_to_close = lv_obj_get_parent(lv_obj_get_parent(btn)); // btn -> footer -> msgbox
+        if (mbox_to_close) {
+            lv_msgbox_close(mbox_to_close);
+        }
+    }, LV_EVENT_CLICKED, NULL);
+}
+
+// --- ADDED: Action handler for "Connect" button in the message box ---
+static void saved_network_connect_action(lv_event_t* e) {
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    lv_obj_t* mbox = lv_obj_get_parent(lv_obj_get_parent(btn)); // btn -> footer -> msgbox
+    // Retrieve the SSID C-string copy from the message box user data
+    char* ssid_cstr = (char*)lv_obj_get_user_data(mbox);
+
+    if (!ssid_cstr || strlen(ssid_cstr) == 0) {
+        DEBUG_PRINT("Error: Invalid or empty SSID pointer in connect action.");
+        if (mbox) lv_msgbox_close(mbox); // Close the message box
         return;
     }
 
-    String ssid = String(ssid_cstr);
-    DEBUG_PRINTF("Saved network item clicked: %s\n", ssid.c_str());
+    // --- Retrieve full NetworkInfo (including password) from WiFiManager ---
+    NetworkInfo netInfo; // Create a local struct to hold the info
+    bool found = false;
+    std::vector<NetworkInfo> savedNetworks = wifiManager.getSavedNetworks();
+    for (const auto& savedNet : savedNetworks) {
+        if (strcmp(savedNet.ssid.c_str(), ssid_cstr) == 0) {
+            netInfo = savedNet; // Copy the found network info
+            found = true;
+            break;
+        }
+    }
+    // --- End NetworkInfo retrieval ---
 
-    // Ensure SPI bus is released before potentially switching screens
-    releaseSPIBus();
+    if (!found) {
+        DEBUG_PRINTF("Error: Could not find saved network info for SSID: %s\n", ssid_cstr);
+        // Show an error message to the user
+        lv_obj_t* err_mbox = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(err_mbox, "Connection Error");
+        lv_msgbox_add_text(err_mbox, "Could not retrieve saved network details.");
+        lv_msgbox_add_footer_button(err_mbox, "OK");
+        lv_obj_center(err_mbox);
+        // Add callback to close error message box
+        lv_obj_add_event_cb(err_mbox, [](lv_event_t* e_err) {
+            lv_obj_t* target_mbox = (lv_obj_t*)lv_event_get_target(e_err);
+            uint16_t btn_id = *(uint16_t*)lv_event_get_param(e_err);
+            if (btn_id == 0) { /* OK clicked, msgbox closes automatically */ }
+        }, LV_EVENT_VALUE_CHANGED, NULL);
 
-    // Transition to the network details screen
-    createNetworkDetailsScreen(ssid);
+        if (mbox) lv_msgbox_close(mbox); // Close the original action message box
+        return;
+    }
+    // --- End NetworkInfo retrieval ---
 
-    // No need to free ssid_cstr here as it's managed by LVGL or duplicated elsewhere if needed
+
+    DEBUG_PRINTF("Attempting to connect to saved network: %s\n", netInfo.ssid.c_str()); // Use SSID from retrieved struct
+
+    // Close the action message box first
+    if (mbox) lv_msgbox_close(mbox); // This also triggers the LV_EVENT_DELETE handler freeing ssid_cstr
+
+    // Show loading screen
+    showWiFiLoadingScreen(netInfo.ssid); // Use SSID from retrieved struct
+
+    // Initiate connection using WiFiManager with retrieved details
+    // Pass save=false as it's already saved
+    wifiManager.connect(netInfo.ssid, netInfo.password, false, netInfo.priority);
+
+    // The result will be handled by the existing onWiFiStatus callback which updates the loading screen
 }
-// --- END ADDED ---
+
+// --- ADDED: Action handler for "Forget" button in the message box ---
+static void saved_network_forget_action(lv_event_t* e) {
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    lv_obj_t* mbox = lv_obj_get_parent(lv_obj_get_parent(btn)); // btn -> footer -> msgbox
+    // Retrieve the SSID C-string copy from the message box user data
+    char* ssid_cstr = (char*)lv_obj_get_user_data(mbox);
+
+    if (!ssid_cstr || strlen(ssid_cstr) == 0) {
+        DEBUG_PRINT("Error: Invalid or empty SSID pointer in forget action.");
+         if (mbox) lv_msgbox_close(mbox); // Close the message box
+        return;
+    }
+
+    // Copy the SSID C-string *before* closing the action message box,
+    // as closing it will free the memory pointed to by ssid_cstr via the DELETE event.
+    char* ssid_to_forget_copy = strdup(ssid_cstr);
+    if (!ssid_to_forget_copy) {
+        DEBUG_PRINT("Error: Failed to allocate memory for SSID copy (forget action)!");
+        if (mbox) lv_msgbox_close(mbox);
+        return;
+    }
+
+    DEBUG_PRINTF("Forget action initiated for: %s\n", ssid_to_forget_copy);
+
+    // Close the action message box first (this frees ssid_cstr)
+    if (mbox) lv_msgbox_close(mbox);
+
+    // Show confirmation dialog using the new copy
+    lv_obj_t* confirm_mbox = lv_msgbox_create(NULL);
+    lv_msgbox_add_title(confirm_mbox, "Confirm Forget");
+    // Format string manually before adding text
+    char confirm_text[128];
+    snprintf(confirm_text, sizeof(confirm_text), "Forget network '%s'?", ssid_to_forget_copy);
+    lv_msgbox_add_text(confirm_mbox, confirm_text); // Use pre-formatted C-string
+    lv_obj_t* cancel_btn_confirm = lv_msgbox_add_footer_button(confirm_mbox, "Cancel");
+    lv_obj_t* forget_btn_confirm = lv_msgbox_add_footer_button(confirm_mbox, "Forget");
+    lv_obj_center(confirm_mbox);
+
+    // Store the new SSID copy (ssid_to_forget_copy) in the confirmation box user data
+    // No need to strdup again, just transfer ownership of the pointer.
+    lv_obj_set_user_data(confirm_mbox, (void*)ssid_to_forget_copy);
+    // Clear the local pointer variable to indicate ownership transfer
+    ssid_to_forget_copy = nullptr;
+
+    // Add delete event to confirmation msgbox to free its copy
+    lv_obj_add_event_cb(confirm_mbox, [](lv_event_t* e_del) {
+        lv_obj_t* target_mbox = (lv_obj_t*)lv_event_get_target(e_del);
+        char* data_to_free = (char*)lv_obj_get_user_data(target_mbox);
+        if (data_to_free) {
+            free(data_to_free);
+            DEBUG_PRINT("Freed SSID user data for forget confirmation msgbox via DELETE event.\n");
+        }
+    }, LV_EVENT_DELETE, NULL);
+
+
+    // Event for Forget button in confirmation
+    lv_obj_add_event_cb(forget_btn_confirm, [](lv_event_t* e_confirm) {
+        lv_obj_t* btn_confirm = (lv_obj_t*)lv_event_get_target(e_confirm);
+        lv_obj_t* mbox_confirm = lv_obj_get_parent(lv_obj_get_parent(btn_confirm));
+        // Retrieve the C-string SSID from the confirmation message box
+        char* ssid_to_forget_confirm = (char*)lv_obj_get_user_data(mbox_confirm);
+
+        if (ssid_to_forget_confirm) {
+            DEBUG_PRINTF("Confirmed forget for: %s\n", ssid_to_forget_confirm);
+            // Call forgetNetwork with the C-string
+            bool success = wifiManager.forgetNetwork(ssid_to_forget_confirm);
+            DEBUG_PRINTF("Forget success: %d\n", success);
+            // Free the memory *after* using it
+            free(ssid_to_forget_confirm);
+            // Clear the user data pointer to prevent double free by the DELETE event
+            lv_obj_set_user_data(mbox_confirm, NULL);
+        } else {
+            DEBUG_PRINT("Error: SSID missing in forget confirmation callback!");
+        }
+
+        // Close confirmation box
+        if (mbox_confirm) lv_msgbox_close(mbox_confirm); // This triggers the DELETE event if pointer wasn't cleared
+
+        // Refresh the WiFi Manager screen to update the list
+        lv_obj_t* current_screen = lv_scr_act(); // Get active screen
+        createWiFiManagerScreen(); // Recreate the manager screen
+        if (current_screen && lv_obj_is_valid(current_screen) && current_screen != lv_scr_act()) {
+            lv_obj_del_async(current_screen); // Delete the old one if different
+        }
+
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Event for Cancel button in confirmation
+    lv_obj_add_event_cb(cancel_btn_confirm, [](lv_event_t* e_cancel) {
+        lv_obj_t* btn_cancel = (lv_obj_t*)lv_event_get_target(e_cancel);
+        lv_obj_t* mbox_cancel = lv_obj_get_parent(lv_obj_get_parent(btn_cancel));
+        // Retrieve and free the C-string SSID from the confirmation message box
+        char* ssid_to_free = (char*)lv_obj_get_user_data(mbox_cancel);
+        if (ssid_to_free) {
+            free(ssid_to_free);
+            // Clear the user data pointer to prevent double free by the DELETE event
+            lv_obj_set_user_data(mbox_cancel, NULL);
+        }
+        if (mbox_cancel) lv_msgbox_close(mbox_cancel); // Close the box (triggers DELETE if pointer wasn't cleared)
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Delete event for confirm_mbox is already added above to handle freeing memory.
+}
+
 
 // --- Implementation of the saved network delete callback ---
+// This might not be needed anymore if we don't use strdup for the main list buttons
+/*
 static void saved_network_delete_cb(lv_event_t* e_del) {
     lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
     if (target_btn) { // Check if target is valid
@@ -3071,6 +3342,7 @@ static void saved_network_delete_cb(lv_event_t* e_del) {
         }
     }
 }
+*/
 
 void createWiFiScreen() {
     if (wifi_screen && lv_obj_is_valid(wifi_screen)) { // Check validity

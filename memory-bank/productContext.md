@@ -23,6 +23,7 @@ A dedicated digital logging device (M5Stack CoreS3) that:
 - **Accuracy**: Standardized fields to ensure consistent data capture.
 - **Reliability**: Dependable local storage of log entries.
 - **Accessibility**: Easy viewing of recent logs on the device.
+- **Manageability**: Simple controls for managing WiFi connections (connect/disconnect/forget saved networks).
 - **Minimal Training**: An interface that is straightforward to learn and use.
 
 ## Desired Outcomes

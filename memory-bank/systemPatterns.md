@@ -20,9 +20,10 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
     *   Main loop handles `M5.update()`, `wifiManager.update()`, and periodic UI time updates.
 2.  **UI Module (`src/ui.h`, `src/ui.cpp`)**:
     *   Manages all LVGL screen creation, styling, and event handling for user interactions.
-    *   Interacts with other modules to display data (logs, WiFi status) and trigger actions (save entry, connect WiFi).
+    *   Interacts with other modules to display data (logs, WiFi status) and trigger actions (save entry, connect WiFi, disconnect WiFi, forget WiFi).
+    *   Includes specific screens like `createWiFiManagerScreen` which now handles saved network actions (connect, forget, disconnect).
 3.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**:
-    *   Manages WiFi connection lifecycle (scan, connect, disconnect, status monitoring).
+    *   Manages WiFi connection lifecycle (scan, connect, disconnect, forget, status monitoring).
     *   Handles saving/loading known networks via `Preferences`.
     *   Provides callbacks (`StatusCallback`, `ScanCallback`) to notify the main application/UI of state changes or scan results.
     *   **Operates synchronously within the `update()` method called from the main loop.**

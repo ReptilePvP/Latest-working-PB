@@ -41,8 +41,8 @@
 ## Key Modules (`src/` and `lib/`)
 
 1.  **Main Application (`src/Loss_Prevention_Log.ino`)**: Entry point, setup, main loop, orchestrates module initialization and updates.
-2.  **UI (`src/ui.h`, `src/ui.cpp`)**: Implements all LVGL screens, styles, widgets, and navigation logic.
-3.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**: Handles WiFi state (connect, disconnect, scan), saves/loads networks using `Preferences`. Operates within the main application loop via its `update()` method (single-threaded design).
+2.  **UI (`src/ui.h`, `src/ui.cpp`)**: Implements all LVGL screens, styles, widgets, and navigation logic. Handles user interactions for WiFi management (connect/disconnect/forget saved networks) within `createWiFiManagerScreen`.
+3.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**: Handles WiFi state (connect, disconnect, forget, scan), saves/loads networks using `Preferences`. Operates within the main application loop via its `update()` method (single-threaded design).
 4.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**: Contains callbacks (`onWiFiStatus`, `onWiFiScanComplete`) used by `WiFiManager` and potentially other WiFi-related utility functions (e.g., `connectToWiFi`, `sendWebhook`).
 5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**: Manages SD card initialization and log file read/write operations via SPI.
 6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**: Handles RTC interaction, system time setting, NTP synchronization, and timestamp formatting.
