@@ -3532,61 +3532,36 @@ void showWiFiKeyboard() {
                         lv_btnmatrix_set_map(btnm, btnm_mapplus[keyboard_page_index]);
                     } else if (strcmp(txt, LV_SYMBOL_BACKSPACE) == 0) {
                         if (ta && lv_obj_check_type(ta, &lv_textarea_class)) {
-                            lv_textarea_delete_char(ta); // Fixed: Use lv_textarea_del_char
+                            lv_textarea_delete_char(ta); // Corrected function name
                         }
                     } else if (strcmp(txt, LV_SYMBOL_OK) == 0) {
+                        // Password entered, OK pressed
                         if (ta && lv_obj_check_type(ta, &lv_textarea_class)) {
                             const char* password = lv_textarea_get_text(ta);
-                            strncpy(selected_password, password, 64);
-                            selected_password[64] = '\0';
+                            strncpy(selected_password, password, sizeof(selected_password) - 1);
+                            selected_password[sizeof(selected_password) - 1] = '\0'; // Ensure null termination
+                            DEBUG_PRINTF("Password captured: %s\n", selected_password); // Be careful logging passwords
                         }
-                        
-                        lv_obj_clean(wifi_keyboard);
-                        
-                        lv_obj_t* pwd_label = lv_label_create(wifi_keyboard);
-                        lv_obj_align(pwd_label, LV_ALIGN_TOP_MID, 0, 30);
-                        
-                        char asterisks[65] = {0};
-                        size_t len = strlen(selected_password);
-                        if (len > 64) len = 64;
-                        for (size_t i = 0; i < len; i++) {
-                            asterisks[i] = '*';
-                        }
-                        asterisks[len] = '\0';
-                        
-                        char buffer[100];
-                        snprintf(buffer, sizeof(buffer), "Password: %s", asterisks);
-                        lv_label_set_text(pwd_label, buffer);
-                        
-                        lv_obj_t* connect_btn = lv_btn_create(wifi_keyboard);
-                        lv_obj_set_size(connect_btn, 140, 50);
-                        lv_obj_align(connect_btn, LV_ALIGN_CENTER, -75, 50);
-                        lv_obj_add_style(connect_btn, &style_btn, 0);
-                        lv_obj_add_style(connect_btn, &style_btn_pressed, LV_STATE_PRESSED);
-                        
-                        lv_obj_t* connect_label = lv_label_create(connect_btn);
-                        lv_label_set_text(connect_label, "Connect");
-                        lv_obj_center(connect_label);
-                        
-                        lv_obj_t* cancel_btn = lv_btn_create(wifi_keyboard);
-                        lv_obj_set_size(cancel_btn, 140, 50);
-                        lv_obj_align(cancel_btn, LV_ALIGN_CENTER, 75, 50);
-                        lv_obj_add_style(cancel_btn, &style_btn, 0);
-                        lv_obj_add_style(cancel_btn, &style_btn_pressed, LV_STATE_PRESSED);
-                        
-                        lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-                        lv_label_set_text(cancel_label, "Cancel");
-                        lv_obj_center(cancel_label);
-                        
-                        lv_obj_add_event_cb(connect_btn, [](lv_event_t* e) {
-                            connectToWiFi(selected_ssid, selected_password);
-                        }, LV_EVENT_CLICKED, NULL);
-                        
-                        lv_obj_add_event_cb(cancel_btn, [](lv_event_t* e) {
-                            lv_obj_del(wifi_keyboard);
+
+                        // --- NEW FLOW ---
+                        // 1. Delete the keyboard UI
+                        if (wifi_keyboard && lv_obj_is_valid(wifi_keyboard)) {
+                            lv_obj_del_async(wifi_keyboard); // Use async delete
                             wifi_keyboard = nullptr;
-                        }, LV_EVENT_CLICKED, NULL);
+                            DEBUG_PRINT("WiFi keyboard deleted.");
+                        }
+
+                        // 2. Show the loading screen/indicator
+                        showWiFiLoadingScreen(selected_ssid); // Display "Attempting to connect..."
+                        DEBUG_PRINTF("Showing loading screen for %s\n", selected_ssid);
+
+                        // 3. Initiate the connection attempt (asynchronously)
+                        connectToWiFi(selected_ssid, selected_password);
+                        DEBUG_PRINT("connectToWiFi initiated.");
+                        // --- END NEW FLOW ---
+
                     } else {
+                        // Regular character input
                         if (ta && lv_obj_check_type(ta, &lv_textarea_class)) {
                             lv_textarea_add_text(ta, txt);
                         }
@@ -3631,8 +3606,8 @@ void showWiFiLoadingScreen(const String& ssid) {
 
     // Loading Label
     wifi_loading_label = lv_label_create(wifi_loading_screen);
-    String loading_text = "Connecting to:\n" + ssid;
-    lv_label_set_text(wifi_loading_label, loading_text.c_str());
+    // String loading_text = "Connecting to:\n" + ssid; // Removed redeclaration
+    lv_label_set_text_fmt(wifi_loading_label, "Connecting to:\n%s", ssid.c_str()); // Use fmt for efficiency
     lv_obj_add_style(wifi_loading_label, &style_text, 0);
     lv_obj_set_style_text_align(wifi_loading_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align_to(wifi_loading_label, wifi_loading_spinner, LV_ALIGN_OUT_BOTTOM_MID, 0, 15);
@@ -3670,23 +3645,92 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
         lv_obj_align(wifi_result_label, LV_ALIGN_CENTER, 0, 0); // Re-center result text
     }
 
-    // Create a timer to automatically close the screen after a delay
-    static lv_timer_t* close_timer = nullptr;
-    if (close_timer) {
-        lv_timer_del(close_timer); // Delete previous timer if any
-    }
-    close_timer = lv_timer_create([](lv_timer_t* timer) {
-        lv_obj_t* screen_to_close = (lv_obj_t*)lv_timer_get_user_data(timer);
-        if (screen_to_close && lv_obj_is_valid(screen_to_close)) {
-             // Decide where to go next based on success?
-             // For now, always go back to WiFi Manager
-             createWiFiManagerScreen();
-             lv_obj_del_async(screen_to_close); // Delete the loading screen
-             wifi_loading_screen = nullptr; // Clear pointer
+    // --- REMOVE AUTOMATIC TIMER CLOSE and duplicated button logic ---
+
+    // --- ADD BUTTONS DIRECTLY ---
+    // Ensure wifi_result_label is valid before aligning to it
+    if (wifi_result_label && lv_obj_is_valid(wifi_result_label)) {
+        lv_obj_t* btn_container = lv_obj_create(wifi_loading_screen);
+        lv_obj_remove_style_all(btn_container); // Remove default styles
+        lv_obj_set_size(btn_container, lv_pct(90), LV_SIZE_CONTENT);
+        lv_obj_align_to(btn_container, wifi_result_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+        lv_obj_set_flex_flow(btn_container, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        if (success) {
+            // Success: Add "Close" button
+            lv_obj_t* close_btn = lv_btn_create(btn_container);
+            lv_obj_add_style(close_btn, &style_btn, 0);
+            lv_obj_add_style(close_btn, &style_btn_pressed, LV_STATE_PRESSED);
+            lv_obj_set_size(close_btn, 120, 40);
+            lv_obj_t* close_label = lv_label_create(close_btn);
+            lv_label_set_text(close_label, "Close");
+            lv_obj_center(close_label);
+
+            // Event handler for Close button
+            lv_obj_add_event_cb(close_btn, [](lv_event_t* e) {
+                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+                lv_obj_t* current_screen = lv_obj_get_screen(btn);
+                createWiFiManagerScreen(); // Go back to WiFi Manager
+                if (current_screen && lv_obj_is_valid(current_screen)) {
+                    lv_obj_del_async(current_screen);
+                    wifi_loading_screen = nullptr; // Clear global pointer
+                }
+            }, LV_EVENT_CLICKED, NULL);
+
+        } else {
+            // Failure: Add "Try Again" and "Cancel" buttons
+            lv_obj_t* try_again_btn = lv_btn_create(btn_container);
+            lv_obj_add_style(try_again_btn, &style_btn, 0);
+            lv_obj_add_style(try_again_btn, &style_btn_pressed, LV_STATE_PRESSED);
+            lv_obj_set_size(try_again_btn, 120, 40);
+            lv_obj_t* try_again_label = lv_label_create(try_again_btn);
+            lv_label_set_text(try_again_label, "Try Again");
+            lv_obj_center(try_again_label);
+
+            lv_obj_t* cancel_btn = lv_btn_create(btn_container);
+            lv_obj_add_style(cancel_btn, &style_btn, 0);
+            lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0x6c757d), 0); // Gray for cancel
+            lv_obj_add_style(cancel_btn, &style_btn_pressed, LV_STATE_PRESSED);
+            lv_obj_set_size(cancel_btn, 120, 40);
+            lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+            lv_label_set_text(cancel_label, "Cancel");
+            lv_obj_center(cancel_label);
+
+            // Event handler for Try Again button
+            // Capture necessary variables (selected_ssid, selected_password)
+            lv_obj_add_event_cb(try_again_btn, [](lv_event_t* e) {
+                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+                lv_obj_t* current_screen = lv_obj_get_screen(btn);
+
+                // Delete the current result screen
+                if (current_screen && lv_obj_is_valid(current_screen)) {
+                    lv_obj_del_async(current_screen);
+                    wifi_loading_screen = nullptr;
+                }
+                lv_task_handler(); // Process deletion
+
+                // Show loading screen again and retry connection
+                showWiFiLoadingScreen(selected_ssid); // Show "Attempting to connect..."
+                connectToWiFi(selected_ssid, selected_password); // Retry with same credentials
+
+            }, LV_EVENT_CLICKED, NULL); // Note: selected_ssid/password are global, no capture needed here
+
+            // Event handler for Cancel button
+            lv_obj_add_event_cb(cancel_btn, [](lv_event_t* e) {
+                lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+                lv_obj_t* current_screen = lv_obj_get_screen(btn);
+                createWiFiManagerScreen(); // Go back to WiFi Manager
+                if (current_screen && lv_obj_is_valid(current_screen)) {
+                    lv_obj_del_async(current_screen);
+                    wifi_loading_screen = nullptr; // Clear global pointer
+                }
+            }, LV_EVENT_CLICKED, NULL);
         }
-        close_timer = nullptr; // Clear static timer pointer
-    }, 3000, wifi_loading_screen); // 3-second delay, pass screen as user data
-    wifi_loading_screen = nullptr; // Also clear screen pointer here
+    } else {
+         DEBUG_PRINT("Error: wifi_result_label is invalid in updateWiFiLoadingScreen, cannot add buttons.");
+    }
+    // --- END ADD BUTTONS DIRECTLY ---
 }
 
 
@@ -3892,12 +3936,12 @@ void createDateSelectionScreen() {
         createSettingsScreen();
         if (current_screen && lv_obj_is_valid(current_screen)) {
             lv_obj_del_async(current_screen);
-            // date_screen = nullptr; // Clear static pointer
+            date_screen = nullptr; // Clear static pointer as screen is deleted
         }
     }, LV_EVENT_CLICKED, NULL);
 
     lv_scr_load(date_screen);
-    // date_screen = nullptr; // Should not clear static pointer here if it's meant to persist
+    // date_screen = nullptr; // Keep static pointer until deleted
 }
 
 void createTimeSelectionScreen() {

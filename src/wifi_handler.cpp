@@ -8,6 +8,17 @@
 #include <cstdlib> // For free
 #include <cstring> // For strdup, strncpy etc.
 
+// --- Helper functions for async UI updates ---
+static void async_update_wifi_success(void* data) {
+    // No data needed for this simple case, but could pass message if needed
+    updateWiFiLoadingScreen(true, "WiFi Connected!");
+}
+
+static void async_update_wifi_failure(void* data) {
+    // No data needed for this simple case
+    updateWiFiLoadingScreen(false, "Connection Failed!");
+}
+
 // --- WiFi Event Callbacks ---
 
 // Implementation from .ino lines 2922-2944
@@ -25,15 +36,19 @@ void onWiFiStatus(WiFiState state, const String& message) {
             lv_color_hex(0xFF0000), 0); // Red
     }
 
-    // Update loading screen if active
+    // Update loading screen if active, using async calls
     if (wifi_loading_screen != nullptr && lv_obj_is_valid(wifi_loading_screen) &&
         lv_scr_act() == wifi_loading_screen) {
         if (state == WiFiState::WIFI_CONNECTED) {
-            updateWiFiLoadingScreen(true, "WiFi Connected!");
+            // Schedule the success update function to run in the LVGL task
+            lv_async_call(async_update_wifi_success, NULL);
         } else if (state == WiFiState::WIFI_DISCONNECTED &&
                    (message.indexOf("failed") >= 0 || message.indexOf("Failed") >= 0)) {
-            updateWiFiLoadingScreen(false, "Connection Failed!");
+            // Schedule the failure update function to run in the LVGL task
+            lv_async_call(async_update_wifi_failure, NULL);
         }
+        // Note: We don't update for WIFI_CONNECTING state here,
+        // the initial "Connecting..." message is set when the screen is shown.
     }
 }
 
