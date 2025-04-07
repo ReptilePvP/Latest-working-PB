@@ -9,8 +9,8 @@ Traditional paper-based logging methods for retail loss prevention are often:
 ## Solution
 A dedicated digital logging device (M5Stack CoreS3) that:
 - Streamlines the process of recording theft incidents via a touch interface.
-- Improves data accuracy and consistency through standardized input fields (gender, apparel, color, item).
-- Provides reliable local SD card storage for easy data retention.
+- Improves data accuracy and consistency through standardized input fields (gender, multi-color selection for clothing, item).
+- Provides reliable local SD card storage (`/loss_prevention_log.txt`) for easy data retention.
 - Enables quick access to recent logs directly on the device.
 
 ## Target Audience

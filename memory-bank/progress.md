@@ -13,23 +13,24 @@
     *   Loading screen with progress bar.
     *   Lock screen with time display and unlock button.
     *   Main menu with card-based navigation (New Entry, Logs, Settings, WiFi, Date/Time, Sleep).
-    *   Multi-step incident entry flow (Gender, Apparel, Shirt Color, Pants Type, Pants Color, Shoe Style, Shoe Color, Item, Confirmation).
-    *   Log viewing screen displaying entries from `log.csv`, grouped by day (last 3 days).
+    *   Multi-step incident entry flow (Gender -> Shirt Color(s) -> Pants Color(s) -> Shoes Color(s) -> Item -> Confirmation). Multi-color selection supported.
+    *   Log viewing screen displaying entries from `/loss_prevention_log.txt`, grouped by day (last 3 days).
     *   Settings screens for:
         *   WiFi (Enable/Disable, Scan, Connect to New, View Saved, **Connect to Saved**, **Disconnect**, **Forget Saved**).
         *   Sound (Enable/Disable, Volume Slider).
-        *   Display (Brightness Slider, Presets).
+        *   Display (Brightness Slider, Presets, Auto-Brightness Toggle).
         *   Date & Time (Manual setting via rollers).
         *   Power Management (Power Off, Restart options with confirmation).
     *   Deep Sleep mode entry (via Main Menu or Power Management screen).
 2.  **Core Functionality**:
     *   Incident data collection through UI flow.
-    *   Saving formatted log entries with timestamps to SD card (`log.csv`).
+    *   Saving formatted log entries with timestamps to SD card (`/loss_prevention_log.txt`).
     *   Loading and parsing log entries for display.
-    *   WiFi connection management (using single-threaded `WiFiManager` in `lib/`, including connect, disconnect, forget, save/load from Preferences).
-    *   NTP time synchronization when WiFi is connected.
-    *   RTC timekeeping as fallback.
-    *   Saving/loading settings (Volume, Brightness, WiFi Enabled state) using `Preferences`.
+    *   Optional webhook sending of log entries when WiFi is connected.
+    *   WiFi connection management (using `src/wifi_handler.*` interface, likely with `lib/WiFiManager/` engine, including connect, disconnect, forget, save/load from Preferences).
+    *   *(NTP time synchronization is NOT currently implemented)*.
+    *   RTC timekeeping.
+    *   Saving/loading settings (Volume, Brightness, WiFi Enabled state, Auto-Brightness state) using `Preferences`.
     *   Deep sleep wake-up via touch screen interrupt (AW9523 -> GPIO 21).
 3.  **Hardware Integration**:
     *   M5Stack CoreS3 initialization (Display, Power, Speaker, RTC).
@@ -39,17 +40,18 @@
 
 ## Known Issues / Areas for Improvement (Inferred)
 -   **WiFi Responsiveness**: Since `WiFiManager` runs in the main loop, lengthy scans or connection attempts *could* potentially cause minor UI lag, although the asynchronous scan (`WiFi.scanNetworks(true)`) helps mitigate this for scanning.
--   **Log Management**: Log viewing currently shows the last 3 days. No features for searching, filtering, exporting, or deleting individual logs (only full reset). Log file could grow large over time.
--   **Error Handling**: While basic error handling exists (e.g., SD card, log parsing), robustness could be improved (e.g., WiFi connection failures, file system errors).
--   **UI/UX**: Some minor potential improvements (e.g., clearer indication of saved network status).
--   **Security**: No password protection for settings or log access. Log file is plain text.
+-   **Log Management**: Log viewing currently shows the last 3 days. No features for searching, filtering, exporting, or deleting individual logs (only full reset of `/loss_prevention_log.txt`). Log file could grow large over time.
+-   **Error Handling**: While basic error handling exists (e.g., SD card, log parsing), robustness could be improved (e.g., WiFi connection failures, file system errors, webhook failures).
+-   **UI/UX**: Some minor potential improvements (e.g., clearer indication of saved network status, feedback during multi-color selection).
+-   **Security**: No password protection for settings or log access. Log file (`/loss_prevention_log.txt`) is plain text.
 
 ## Potential Next Steps (Suggestions)
 1.  **Testing**: Thoroughly test the new WiFi management features (Connect/Disconnect/Forget from saved list) and other existing features, especially deep sleep/wake-up, and SD card logging over extended periods.
 2.  **Log Management Features**: Implement log searching, filtering, or export functionality. Consider log rotation or archiving.
-3.  **WiFi Robustness**: Enhance error handling and user feedback during WiFi connection process. Consider implementing the background task for WiFi if UI responsiveness during connection becomes an issue.
-4.  **Security**: Add basic PIN lock or password protection. Consider simple log encryption.
-5.  **Cloud Integration**: Implement webhook sending or explore full cloud sync.
-6.  **Code Refinement**: Review code for potential optimizations (memory, power) and clarity.
+3.  **WiFi Robustness**: Enhance error handling and user feedback during WiFi connection process. Consider implementing a background task for WiFi if UI responsiveness during connection becomes an issue. Improve webhook reliability/feedback.
+4.  **Security**: Add basic PIN lock or password protection. Consider simple log encryption for `/loss_prevention_log.txt`.
+5.  **Cloud Integration**: Enhance webhook functionality (e.g., configuration, retries) or explore full cloud sync.
+6.  **NTP Sync**: Implement optional automatic time synchronization over WiFi.
+7.  **Code Refinement**: Review code for potential optimizations (memory, power) and clarity.
 
 This progress report reflects the state based on code analysis. Further testing may reveal additional issues or confirm functionality.

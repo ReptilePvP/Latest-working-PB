@@ -41,26 +41,26 @@
 ## Key Modules (`src/` and `lib/`)
 
 1.  **Main Application (`src/Loss_Prevention_Log.ino`)**: Entry point, setup, main loop, orchestrates module initialization and updates.
-2.  **UI (`src/ui.h`, `src/ui.cpp`)**: Implements all LVGL screens, styles, widgets, and navigation logic. Handles user interactions for WiFi management (connect/disconnect/forget saved networks) within `createWiFiManagerScreen`.
-3.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**: Handles WiFi state (connect, disconnect, forget, scan), saves/loads networks using `Preferences`. Operates within the main application loop via its `update()` method (single-threaded design).
-4.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**: Contains callbacks (`onWiFiStatus`, `onWiFiScanComplete`) used by `WiFiManager` and potentially other WiFi-related utility functions (e.g., `connectToWiFi`, `sendWebhook`).
-5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**: Manages SD card initialization and log file read/write operations via SPI.
-6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**: Handles RTC interaction, system time setting, NTP synchronization, and timestamp formatting.
+2.  **UI (`src/ui.h`, `src/ui.cpp`)**: Implements all LVGL screens, styles, widgets, and navigation logic. Handles user interactions, calling functions in other modules (e.g., `wifi_handler`, `sd_logger`).
+3.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**: **Primary interface** for WiFi operations. Manages state, scanning, connection, persistence (likely using `lib/WiFiManager/` internally). Contains callbacks (`onWiFiStatus`, `onWiFiScanComplete`) and helper functions (`connectToWiFi`, `sendWebhook`).
+4.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**: **Internal engine** for WiFi lifecycle, provides callbacks used by `wifi_handler`. Operates within the main application loop via its `update()` method (single-threaded design). Saves/loads networks using `Preferences`.
+5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**: Manages SD card initialization and log file (`/loss_prevention_log.txt`) read/write operations via SPI. **Implements SPI bus switching** to avoid conflicts with the display.
+6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**: Handles RTC interaction, system time setting from RTC, and timestamp formatting. *(NTP synchronization is NOT implemented)*.
 7.  **Globals (`src/globals.h`)**: Defines shared constants, global variables (declared `extern`), and potentially forward declarations.
 
 ## Hardware Interfaces
 
 1.  **Display**: 320x240 IPS LCD touchscreen, managed via M5Unified/M5GFX and LVGL.
-2.  **SD Card**: Connected via SPI interface (Pins defined in `sd_logger.cpp` or `globals.h`).
+2.  **SD Card**: Connected via SPI interface (HSPI bus). Pins defined in `sd_logger.cpp` or `globals.h`. Requires SPI bus switching logic in `sd_logger.cpp`.
 3.  **Power/RTC**: Managed via I2C using AXP2101 chip.
-4.  **Touch/Wake**: Touch input via FT6336 (I2C), wake-up from deep sleep via AW9523 (I2C) interrupt connected to GPIO 21.
+4.  **Touch/Wake**: Touch input via FT6336 (I2C). Wake-up from deep sleep triggered by touch panel interrupt via AW9523 I/O expander (I2C), whose interrupt output is connected to CoreS3 GPIO 21.
 5.  **Speaker**: Integrated speaker controlled via M5Unified API.
 
 ## Technical Constraints
 
 1.  **Memory Limitations**: ESP32-S3 requires efficient memory usage, especially with LVGL. PSRAM is enabled (`-DBOARD_HAS_PSRAM`).
 2.  **Power Management**: Battery-powered operation necessitates efficient code and use of sleep modes (deep sleep implemented).
-3.  **Single-Threaded WiFi**: Current `WiFiManager` runs in the main loop; complex or blocking WiFi operations could potentially impact UI responsiveness if not handled carefully within the `update()` cycle or callbacks.
+3.  **Single-Threaded WiFi**: The underlying `WiFiManager` engine runs in the main loop; complex or blocking WiFi operations managed by `wifi_handler` could potentially impact UI responsiveness if not handled carefully within the `update()` cycle or callbacks.
 4.  **Storage**: SD card speed and capacity limitations.
 
 ## Development Workflow

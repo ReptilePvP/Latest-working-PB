@@ -12,32 +12,32 @@ The Loss Prevention Log System is a digital logging tool for retail environments
 ## Scope
 - **Hardware**: M5Stack CoreS3.
 - **Interface**: Touch-based GUI built with LVGL v9.
-- **Storage**: Local storage on SD card.
-- **Connectivity**: WiFi for time synchronization (NTP) and potentially future features (e.g., webhooks).
-- **Functionality**: Incident logging (gender, apparel, color, item), log viewing, device settings (WiFi, sound, brightness, date/time, power).
+- **Storage**: Local storage on SD card (`/loss_prevention_log.txt`).
+- **Connectivity**: WiFi for potential future features (e.g., webhooks). Time is managed via RTC and manual setting.
+- **Functionality**: Incident logging (gender, multi-color selection for shirt/pants/shoes, item), log viewing, device settings (WiFi, sound, brightness, date/time, power).
 
 ## Key Features (Implemented)
 - **UI**:
     - Loading and Lock screens.
     - Main menu with card-style navigation.
-    - Multi-step incident entry flow (Gender -> Apparel Type -> Shirt Color -> Pants Type -> Pants Color -> Shoe Style -> Shoe Color -> Item -> Confirmation).
+    - Multi-step incident entry flow (Gender -> Shirt Color(s) -> Pants Color(s) -> Shoes Color(s) -> Item -> Confirmation). Multi-color selection supported for clothing.
     - Log viewing screen with entries grouped by day (last 3 days).
-    - Settings menu for WiFi, Sound, Display (Brightness), Date & Time, Power Management.
+    - Settings menu for WiFi, Sound, Display (Brightness, Auto-Brightness Toggle), Date & Time, Power Management.
     - WiFi management screen (scan, connect via password entry, view saved networks, **connect to saved**, **disconnect**, **forget saved**).
 - **Logging**:
-    - Saves formatted log entries with timestamps to SD card (`log.csv`).
+    - Saves formatted log entries with timestamps to SD card (`/loss_prevention_log.txt`).
     - Parses and displays logs.
+    - Optional webhook functionality (`sendWebhook`) to send logs over WiFi.
 - **Connectivity**:
     - WiFi scanning and connection (WPA/WPA2).
     - Saves known networks using Preferences.
     - Automatic connection attempts to best/saved network.
-    - Time synchronization via NTP when connected.
-    - Basic webhook functionality (`sendWebhook`).
+    - *(NTP time synchronization is NOT currently implemented)*.
 - **Device Management**:
-    - RTC for timekeeping (fallback when offline).
+    - RTC for timekeeping.
     - Manual Date & Time setting via UI.
     - Sound enable/disable and volume control.
-    - Display brightness control.
+    - Display brightness control (slider, presets, auto-brightness toggle).
     - Power options: Restart, Power Off, Deep Sleep (wake via touch).
     - Persistent settings storage using `Preferences`.
 

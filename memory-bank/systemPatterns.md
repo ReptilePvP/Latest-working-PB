@@ -20,22 +20,25 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
     *   Main loop handles `M5.update()`, `wifiManager.update()`, and periodic UI time updates.
 2.  **UI Module (`src/ui.h`, `src/ui.cpp`)**:
     *   Manages all LVGL screen creation, styling, and event handling for user interactions.
-    *   Interacts with other modules to display data (logs, WiFi status) and trigger actions (save entry, connect WiFi, disconnect WiFi, forget WiFi).
-    *   Includes specific screens like `createWiFiManagerScreen` which now handles saved network actions (connect, forget, disconnect).
-3.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**:
-    *   Manages WiFi connection lifecycle (scan, connect, disconnect, forget, status monitoring).
-    *   Handles saving/loading known networks via `Preferences`.
-    *   Provides callbacks (`StatusCallback`, `ScanCallback`) to notify the main application/UI of state changes or scan results.
-    *   **Operates synchronously within the `update()` method called from the main loop.**
-4.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**:
-    *   Implements the callback functions (`onWiFiStatus`, `onWiFiScanComplete`) used by `WiFiManager`. These callbacks likely update UI elements or global state.
+    *   Interacts with other modules to display data (logs, WiFi status) and trigger actions (save entry, call WiFi functions in `wifi_handler`).
+    *   Includes specific screens like `createWiFiManagerScreen` which now handles saved network actions (connect, forget, disconnect) by calling functions in `wifi_handler`.
+3.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**:
+    *   **Primary interface** for WiFi operations used by the UI and main application.
+    *   Manages WiFi state, scanning, connection, disconnection, and network persistence (likely using `lib/WiFiManager/` internally).
+    *   Implements callback functions (`onWiFiStatus`, `onWiFiScanComplete`) registered with the underlying WiFi management logic (likely `lib/WiFiManager/`). These callbacks update UI elements or global state.
     *   Contains helper functions like `connectToWiFi` (called from UI) and `sendWebhook`.
+4.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**:
+    *   **Internal engine** for WiFi connection lifecycle (scan, connect, disconnect, forget, status monitoring).
+    *   Handles saving/loading known networks via `Preferences`.
+    *   Provides callbacks (`StatusCallback`, `ScanCallback`) used by `src/wifi_handler.cpp`.
+    *   Operates synchronously within the `update()` method called from the main loop.
 5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**:
     *   Handles all interactions with the SD card via SPI.
-    *   Provides functions for initializing the filesystem, saving log entries, and loading/parsing log entries.
+    *   Provides functions for initializing the filesystem, saving log entries (`/loss_prevention_log.txt`), and loading/parsing log entries.
+    *   **Crucially implements SPI bus switching** logic (`SPI.end()`, `SPI_SD.begin()`, `SD.begin()`, `SPI_SD.end()`, `SPI.begin()`) within its functions (`initFileSystem`, `appendToLog`, `loadAllLogEntries`, `resetLogFile`) to prevent conflicts between the SD card (HSPI) and the display (VSPI).
 6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**:
     *   Manages RTC communication.
-    *   Handles system time synchronization (from RTC and potentially NTP via `WiFiManager`).
+    *   Handles system time synchronization from RTC. *(NTP sync is not implemented)*.
     *   Provides timestamp formatting functions.
 7.  **LVGL Task (`lvgl_task` in `Loss_Prevention_Log.ino`)**:
     *   Dedicated FreeRTOS task responsible for calling `lv_timer_handler()` periodically.
@@ -48,6 +51,7 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
 3.  **State Pattern**: Implemented within `WiFiManager` to manage the different WiFi connection states.
 4.  **Observer (Implicit)**: The callback mechanism acts as a form of the Observer pattern, where the UI or main application observes changes in the `WiFiManager` state.
 5.  **Modular Programming**: Code is broken down into logical modules (`.h`/`.cpp` pairs).
+6.  **SPI Bus Management**: Explicit switching between SPI buses (HSPI for SD, VSPI for Display) within `sd_logger.cpp` to prevent hardware conflicts.
 
 ## Data Flow Example (WiFi Scan)
 
@@ -72,6 +76,6 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
 
 -   **LVGL Task**: Offloads LVGL rendering updates from the main loop.
 -   **Memory**: Use of `Preferences` for settings, careful string handling (though `String` class is used). PSRAM enabled.
--   **Power**: ESP32 WiFi sleep mode enabled by default. Deep sleep implemented for low-power states.
+-   **Power**: ESP32 WiFi sleep mode enabled by default. Deep sleep implemented for low-power states, with wake-up triggered by the touch panel interrupt via the AW9523 chip connected to GPIO21.
 
 This architecture provides a functional structure but relies heavily on the main loop for processing WiFi state changes. The separation of LVGL rendering into its own task helps maintain UI responsiveness.
