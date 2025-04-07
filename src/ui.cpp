@@ -3593,7 +3593,6 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
 }
 
 
-
 // Static callback handlers for date/time rollers
 static void on_year_change(lv_event_t* e) {
     if (!g_year_roller || !g_selected_date_label || !lv_obj_is_valid(g_year_roller) || !lv_obj_is_valid(g_selected_date_label)) return; // Add validity checks
