@@ -95,6 +95,7 @@ static inline void _debug_printf_helper(const char *format, ...) {
 #define MAX_WIFI_CONNECTION_ATTEMPTS 5
 #define SCAN_TIMEOUT 30000 // 30 seconds
 
+
 // --- SD Card ---
 #define LOG_FILENAME "/loss_prevention_log.txt"
 extern SPIClass SPI_SD; // Custom SPI instance for SD card
