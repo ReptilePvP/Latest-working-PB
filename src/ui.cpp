@@ -3053,13 +3053,8 @@ void createWiFiScreen() {
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
         lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e); // Target is the button
         lv_obj_t* current_screen = lv_obj_get_screen(btn); // Get screen from button
-        // Stop scan timer if active
-        if (scan_timer) {
-            lv_timer_del(scan_timer);
-            scan_timer = nullptr;
-        }
         createWiFiManagerScreen();
-         if (current_screen && lv_obj_is_valid(current_screen)) {
+        if (current_screen && lv_obj_is_valid(current_screen)) {
             lv_obj_del_async(current_screen);
             wifi_screen = nullptr;
         }

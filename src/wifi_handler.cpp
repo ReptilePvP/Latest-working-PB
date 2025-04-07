@@ -100,11 +100,7 @@ void onWiFiScanComplete(const std::vector<NetworkInfo>& results) {
                                     free(stored_ssid);
                                     lv_obj_set_user_data((lv_obj_t*)lv_event_get_target(e), NULL); // Clear user data pointer
 
-                                    // Delete the scan list screen after transitioning
-                                    if (current_screen && lv_obj_is_valid(current_screen)) {
-                                        lv_obj_del_async(current_screen);
-                                        // wifi_screen = nullptr; // Cannot assign to global in captureless lambda, pointer managed elsewhere
-                                    }
+                                    // DO NOT delete the scan list screen here
                                 }
                             }, LV_EVENT_CLICKED, (void*)ssid_copy); // Pass the copy
                         } else {
