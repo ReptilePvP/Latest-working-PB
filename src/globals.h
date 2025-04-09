@@ -66,7 +66,15 @@ static inline void _debug_printf_helper(const char *format, ...) {
 
 // --- Debug ---
 #define DEBUG_ENABLED true
-#define DEBUG_PRINT(x) if(DEBUG_ENABLED) { Serial.print(millis()); Serial.print(": "); Serial.println(x); }
+// Helper function for DEBUG_PRINT
+inline void _debug_print_helper_ln(const char* msg) {
+    if (DEBUG_ENABLED) {
+        Serial.print(millis());
+        Serial.print(": ");
+        Serial.println(msg);
+    }
+}
+#define DEBUG_PRINT(x) _debug_print_helper_ln(x)
 #define DEBUG_PRINTF(format, ...) do { if (DEBUG_ENABLED) _debug_printf_helper(format, __VA_ARGS__); } while(0)
 #define DEBUG_PRINTLN(x) if(DEBUG_ENABLED) { Serial.print(millis()); Serial.print(": "); Serial.println(x); } // Added LN version
 
@@ -176,6 +184,10 @@ extern lv_obj_t* lock_screen;
 extern lv_obj_t* settingsScreen;
 extern lv_obj_t* view_logs_screen;
 extern lv_obj_t* wifi_manager_screen;
+extern lv_obj_t* brightness_settings_screen; // Added extern
+extern lv_obj_t* date_screen; // Added extern
+extern lv_obj_t* time_screen; // Added extern
+
 // ... other screen pointers ...
 extern lv_obj_t* status_bar;
 extern lv_obj_t* time_label; // Main menu time

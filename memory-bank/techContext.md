@@ -45,7 +45,7 @@
 3.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**: **Primary interface** for WiFi operations. Manages state, scanning, connection, persistence (likely using `lib/WiFiManager/` internally). Contains callbacks (`onWiFiStatus`, `onWiFiScanComplete`) and helper functions (`connectToWiFi`, `sendWebhook`).
 4.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**: **Internal engine** for WiFi lifecycle, provides callbacks used by `wifi_handler`. Operates within the main application loop via its `update()` method (single-threaded design). Saves/loads networks using `Preferences`.
 5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**: Manages SD card initialization and log file (`/loss_prevention_log.txt`) read/write operations via SPI. **Implements SPI bus switching** to avoid conflicts with the display.
-6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**: Handles RTC interaction, system time setting from RTC, and timestamp formatting. *(NTP synchronization is NOT implemented)*.
+6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**: Handles RTC interaction (`save_time_to_rtc`, `setSystemTimeFromRTC`), **NTP time synchronization** (`syncTimeWithNTP`, `getLastSyncStatus` using standard ESP32 `time.h` functions), and timestamp formatting (`getTimestamp`).
 7.  **Globals (`src/globals.h`)**: Defines shared constants, global variables (declared `extern`), and potentially forward declarations.
 
 ## Hardware Interfaces

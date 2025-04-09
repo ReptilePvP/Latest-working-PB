@@ -13,5 +13,7 @@ void sendWebhook(const String& entry);
 // --- WiFi Connection ---
 void connectToWiFi(const char* ssid, const char* password);
 
-// --- Helper Functions (If any needed specifically for WiFi handling) ---
+// --- Helper Functions ---
+bool isWiFiConnected(); // Returns true if WiFi is currently connected
+
 #endif // WIFI_HANDLER_H

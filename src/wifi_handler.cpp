@@ -3,10 +3,11 @@
 #include "m5gfx_lvgl.hpp"   // Ensure LVGL types like lv_obj_t are known before globals.h
 #include "globals.h"
 #include "ui.h" // For updateStatus, showWiFiKeyboard, createWiFiScreen etc.
-#include "time_utils.h" // Needed for getTimestamp
+#include "time_utils.h" // Needed for getTimestamp AND syncTimeWithNTP
 #include <WiFiClientSecure.h> // Needed for HTTPS webhook
 #include <cstdlib> // For free
 #include <cstring> // For strdup, strncpy etc.
+#include <WiFi.h> // Needed for WiFi.status() in isWiFiConnected
 
 // --- Helper functions for async UI updates ---
 static void async_update_wifi_success(void* data) {
@@ -48,9 +49,22 @@ void onWiFiStatus(WiFiState state, const String& message) {
             lv_async_call(async_update_wifi_failure, NULL);
         }
         // Note: We don't update for WIFI_CONNECTING state here,
-        // the initial "Connecting..." message is set when the screen is shown.
-    }
-}
+         // the initial "Connecting..." message is set when the screen is shown.
+     }
+
+     // --- ADDED: Trigger NTP Sync on Connection ---
+     if (state == WiFiState::WIFI_CONNECTED) {
+         DEBUG_PRINT("WiFi connected, attempting NTP sync...");
+         if (syncTimeWithNTP()) {
+             DEBUG_PRINT("NTP sync successful (triggered by WiFi connection).");
+             // Optionally update UI or status here if needed
+         } else {
+             DEBUG_PRINT("NTP sync failed (triggered by WiFi connection).");
+             // Optionally update UI or status here if needed
+         }
+     }
+     // --- END ADDED ---
+ }
 
 // Implementation from .ino lines 2946-3046
 void onWiFiScanComplete(const std::vector<NetworkInfo>& results) {
@@ -298,6 +312,12 @@ void connectToWiFi(const char* ssid, const char* password) {
     // For now, we replicate the original logic's location.
     if (wifi_keyboard && lv_obj_is_valid(wifi_keyboard)) {
         lv_obj_del_async(wifi_keyboard); // Use async delete
-        wifi_keyboard = nullptr;
-    }
-}
+         wifi_keyboard = nullptr;
+     }
+ }
+
+ // --- Helper Functions ---
+ bool isWiFiConnected() {
+     // Use the standard WiFi library status check
+     return (WiFi.status() == WL_CONNECTED);
+ }

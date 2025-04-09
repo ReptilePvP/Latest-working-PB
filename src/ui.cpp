@@ -4346,7 +4346,54 @@ void createTimeSelectionScreen() {
     lv_obj_t* save_label = lv_label_create(save_btn);
     lv_label_set_text(save_label, "Save");
     lv_obj_center(save_label);
-    
+
+    // --- ADDED: NTP Sync Status Label ---
+    // Static pointer for the label to be updated by the button callback
+    static lv_obj_t* ntp_status_label = nullptr;
+    if (ntp_status_label && lv_obj_is_valid(ntp_status_label)) lv_obj_del(ntp_status_label); // Clean previous if exists
+    ntp_status_label = lv_label_create(container);
+    lv_label_set_text(ntp_status_label, ("Last Sync: " + getLastSyncStatus()).c_str()); // Initial status
+    lv_obj_set_width(ntp_status_label, 280); // Match container width roughly
+    lv_label_set_long_mode(ntp_status_label, LV_LABEL_LONG_WRAP);
+    lv_obj_align_to(ntp_status_label, g_selected_time_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10); // Position below selected time
+    lv_obj_add_style(ntp_status_label, &style_text, 0);
+    lv_obj_set_style_text_font(ntp_status_label, &lv_font_montserrat_12, 0); // Smaller font for status
+
+    // --- ADDED: NTP Sync Button ---
+    lv_obj_t* sync_btn = lv_btn_create(container);
+    lv_obj_set_size(sync_btn, 140, 35); // Slightly smaller button
+    lv_obj_align_to(sync_btn, ntp_status_label, LV_ALIGN_OUT_BOTTOM_MID, 0, 10); // Position below status label
+    lv_obj_add_style(sync_btn, &style_btn, 0);
+    lv_obj_set_style_bg_color(sync_btn, lv_color_hex(0x4A90E2), 0); // Blue color
+    lv_obj_add_style(sync_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* sync_label = lv_label_create(sync_btn);
+    lv_label_set_text(sync_label, LV_SYMBOL_REFRESH " Sync Now");
+    lv_obj_center(sync_label);
+
+    // Event callback for Sync Now button
+    lv_obj_add_event_cb(sync_btn, [](lv_event_t* e) {
+        if (!ntp_status_label || !lv_obj_is_valid(ntp_status_label)) return; // Check if label is valid
+
+        if (isWiFiConnected()) {
+            lv_label_set_text(ntp_status_label, "Syncing...");
+            lv_task_handler(); // Update UI to show "Syncing..."
+            bool success = syncTimeWithNTP();
+            // Update label with result from getLastSyncStatus (which syncTimeWithNTP updated)
+            lv_label_set_text(ntp_status_label, ("Last Sync: " + getLastSyncStatus()).c_str());
+            if (success) {
+                // Optionally: Update rollers to reflect new time (more complex)
+                // For now, just update the status label. User can see time on lock/main screen.
+                DEBUG_PRINT("Manual NTP Sync successful.");
+            } else {
+                 DEBUG_PRINT("Manual NTP Sync failed.");
+            }
+        } else {
+            lv_label_set_text(ntp_status_label, "Last Sync: Failed (No WiFi)");
+        }
+    }, LV_EVENT_CLICKED, NULL);
+    // --- END ADDED ---
+
+
     lv_obj_add_event_cb(save_btn, [](lv_event_t* e) {
         lv_obj_t* saving_label = lv_label_create(lv_scr_act());
         lv_label_set_text(saving_label, "Saving...");

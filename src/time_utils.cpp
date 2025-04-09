@@ -1,6 +1,18 @@
 #include "time_utils.h"
 #include "globals.h"
 #include <sys/time.h> // For settimeofday
+#include <WiFi.h>     // For WiFi status check
+#include <time.h>     // For time functions like configTime, getLocalTime
+
+// --- NTP Configuration ---
+const char* ntpServer1 = "pool.ntp.org";
+const char* ntpServer2 = "time.nist.gov";
+// TODO: Make timezone configurable. Using UTC for now.
+const long gmtOffset_sec = 0; // UTC offset in seconds
+const int daylightOffset_sec = 0; // Daylight saving offset in seconds
+
+// --- Static variable for last sync status ---
+static String lastSyncStatus = "Never";
 
 // --- Time Functions ---
 
@@ -103,7 +115,18 @@ void save_time_to_rtc() {
     int h = (q + (13 * (m + 1)) / 5 + K + K / 4 + J / 4 + 5 * J) % 7; // Adjusted Zeller for 0=Sat
     DateStruct.weekDay = (h + 1) % 7; // Convert Zeller's result (0=Sat) to M5's (0=Sun)
 
-    M5.Rtc.setDate(&DateStruct); // Removed check
+    DEBUG_PRINT("Attempting to set RTC Date...");
+    M5.Rtc.setDate(&DateStruct);
+    DEBUG_PRINT("RTC Date set call completed.");
+
+    // Read back date immediately to verify
+    m5::rtc_date_t read_date;
+    if (M5.Rtc.getDate(&read_date)) {
+        DEBUG_PRINTF("RTC Date read back: %04d-%02d-%02d (Weekday: %d)\n", read_date.year, read_date.month, read_date.date, read_date.weekDay);
+    } else {
+        DEBUG_PRINT("Failed to read back RTC Date after setting!");
+    }
+
 
     m5::rtc_time_t TimeStruct;
     // Convert 12-hour format with AM/PM to 24-hour format for RTC
@@ -117,9 +140,80 @@ void save_time_to_rtc() {
     TimeStruct.minutes = selected_minute;
     TimeStruct.seconds = 0; // Set seconds to 0 when saving
 
-    M5.Rtc.setTime(&TimeStruct); // Removed check
+    DEBUG_PRINT("Attempting to set RTC Time...");
+    M5.Rtc.setTime(&TimeStruct);
+    DEBUG_PRINT("RTC Time set call completed.");
+
+    // Read back time immediately to verify
+    m5::rtc_time_t read_time;
+    if (M5.Rtc.getTime(&read_time)) {
+        DEBUG_PRINTF("RTC Time read back: %02d:%02d:%02d\n", read_time.hours, read_time.minutes, read_time.seconds);
+    } else {
+        DEBUG_PRINT("Failed to read back RTC Time after setting!");
+    }
 
     // After setting RTC, update the system time immediately
+    // We proceed even if the read-back check shows issues, as the set might still have worked partially
+    // or the read failed. The primary goal is to set the system time based on user input.
     setSystemTimeFromRTC();
-    DEBUG_PRINT("Time saved to RTC successfully");
+    DEBUG_PRINT("System time update attempted after RTC set.");
+
+}
+
+// --- NTP Sync Function ---
+bool syncTimeWithNTP() {
+    if (WiFi.status() != WL_CONNECTED) {
+        DEBUG_PRINT("NTP Sync failed: WiFi not connected.");
+        lastSyncStatus = "Failed (No WiFi)";
+        return false;
+    }
+
+    DEBUG_PRINT("Attempting NTP time synchronization...");
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer1, ntpServer2);
+
+    struct tm timeinfo;
+    // Try to get time for up to 10 seconds
+    if (!getLocalTime(&timeinfo, 10000)) {
+        DEBUG_PRINT("NTP Sync failed: Could not obtain time from server.");
+        lastSyncStatus = "Failed (Server Error)";
+        return false;
+    }
+
+    DEBUG_PRINTF("NTP Sync successful: %s", asctime(&timeinfo));
+
+    // Time obtained, now set the RTC
+    m5::rtc_date_t date_to_set;
+    date_to_set.year = timeinfo.tm_year + 1900;
+    date_to_set.month = timeinfo.tm_mon + 1;
+    date_to_set.date = timeinfo.tm_mday;
+    date_to_set.weekDay = timeinfo.tm_wday; // tm_wday: 0=Sun, 6=Sat (matches M5 RTC)
+
+    m5::rtc_time_t time_to_set;
+    time_to_set.hours = timeinfo.tm_hour;
+    time_to_set.minutes = timeinfo.tm_min;
+    time_to_set.seconds = timeinfo.tm_sec;
+
+    DEBUG_PRINT("Setting RTC from NTP time...");
+    M5.Rtc.setDate(&date_to_set); // Returns void
+    M5.Rtc.setTime(&time_to_set); // Returns void
+    DEBUG_PRINT("RTC set calls completed (assuming success).");
+
+    // Since we can't check return value, assume success if NTP fetch worked.
+    // Format the successful sync time for the status
+    char buffer[30];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    lastSyncStatus = "Success: " + String(buffer);
+
+    // Ensure system time is also explicitly set (though getLocalTime might do it)
+    time_t t = mktime(&timeinfo);
+    struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
+    settimeofday(&tv, NULL);
+    DEBUG_PRINT("System time updated from NTP.");
+
+    return true;
+}
+
+// --- Get Last Sync Status ---
+String getLastSyncStatus() {
+    return lastSyncStatus;
 }

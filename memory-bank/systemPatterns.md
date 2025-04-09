@@ -17,16 +17,17 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
     *   Entry point (`setup()`, `loop()`).
     *   Initializes hardware (M5Unified, Power, Speaker, RTC) and software modules (LVGL, WiFiManager, SDLogger, TimeUtils).
     *   Creates the `lvgl_task`.
+    *   Attempts initial NTP sync if WiFi connects automatically.
     *   Main loop handles `M5.update()`, `wifiManager.update()`, and periodic UI time updates.
 2.  **UI Module (`src/ui.h`, `src/ui.cpp`)**:
     *   Manages all LVGL screen creation, styling, and event handling for user interactions.
-    *   Interacts with other modules to display data (logs, WiFi status) and trigger actions (save entry, call WiFi functions in `wifi_handler`).
-    *   Includes specific screens like `createWiFiManagerScreen` which now handles saved network actions (connect, forget, disconnect) by calling functions in `wifi_handler`.
+    *   Interacts with other modules to display data (logs, WiFi status, NTP sync status) and trigger actions (save entry, call WiFi functions in `wifi_handler`, trigger manual NTP sync).
+    *   Includes specific screens like `createWiFiManagerScreen` (handles saved network actions) and `createTimeSelectionScreen` (includes manual NTP sync button and status display).
 3.  **WiFi Handler (`src/wifi_handler.h`, `src/wifi_handler.cpp`)**:
     *   **Primary interface** for WiFi operations used by the UI and main application.
     *   Manages WiFi state, scanning, connection, disconnection, and network persistence (likely using `lib/WiFiManager/` internally).
-    *   Implements callback functions (`onWiFiStatus`, `onWiFiScanComplete`) registered with the underlying WiFi management logic (likely `lib/WiFiManager/`). These callbacks update UI elements or global state.
-    *   Contains helper functions like `connectToWiFi` (called from UI) and `sendWebhook`.
+    *   Implements callback functions (`onWiFiStatus`, `onWiFiScanComplete`) registered with the underlying WiFi management logic (likely `lib/WiFiManager/`). These callbacks update UI elements or global state. **`onWiFiStatus` now triggers NTP sync upon connection.**
+    *   Contains helper functions like `connectToWiFi` (called from UI), `sendWebhook`, and `isWiFiConnected`.
 4.  **WiFi Manager (`lib/WiFiManager/WiFiManager.h`, `lib/WiFiManager/WiFiManager.cpp`)**:
     *   **Internal engine** for WiFi connection lifecycle (scan, connect, disconnect, forget, status monitoring).
     *   Handles saving/loading known networks via `Preferences`.
@@ -37,9 +38,11 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
     *   Provides functions for initializing the filesystem, saving log entries (`/loss_prevention_log.txt`), and loading/parsing log entries.
     *   **Crucially implements SPI bus switching** logic (`SPI.end()`, `SPI_SD.begin()`, `SD.begin()`, `SPI_SD.end()`, `SPI.begin()`) within its functions (`initFileSystem`, `appendToLog`, `loadAllLogEntries`, `resetLogFile`) to prevent conflicts between the SD card (HSPI) and the display (VSPI).
 6.  **Time Utilities (`src/time_utils.h`, `src/time_utils.cpp`)**:
-    *   Manages RTC communication.
-    *   Handles system time synchronization from RTC. *(NTP sync is not implemented)*.
-    *   Provides timestamp formatting functions.
+    *   Manages RTC communication (`save_time_to_rtc`, `setSystemTimeFromRTC`).
+    *   **Handles NTP time synchronization**:
+        *   `syncTimeWithNTP()`: Configures NTP, fetches time, updates system clock and RTC.
+        *   `getLastSyncStatus()`: Returns status of last sync attempt.
+    *   Provides timestamp formatting functions (`getTimestamp`).
 7.  **LVGL Task (`lvgl_task` in `Loss_Prevention_Log.ino`)**:
     *   Dedicated FreeRTOS task responsible for calling `lv_timer_handler()` periodically.
     *   Uses a semaphore (`xGuiSemaphore`) to protect access to LVGL functions from the main loop or other tasks if necessary (though current interaction seems limited).
@@ -64,6 +67,33 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
 7.  Inside `wifiManager.update()`, `updateState()` checks `WiFi.scanComplete()`.
 8.  When the scan finishes (`scanComplete() >= 0`), `updateState()` processes the results, populates `_scanResults`, sets `_scanInProgress = false`, and calls the registered `_scanCallback` (`onWiFiScanComplete` in `wifi_handler.cpp`).
 9.  `onWiFiScanComplete` (running in the main loop's context) receives the results and updates the UI list (`wifi_list` in `ui.cpp`).
+
+## Data Flow Example (NTP Sync - Automatic)
+
+1.  `WiFiManager::update()` detects a transition to `WIFI_CONNECTED` state.
+2.  `WiFiManager` calls the registered `_statusCallback` (`onWiFiStatus` in `wifi_handler.cpp`).
+3.  `onWiFiStatus` checks if the new state is `WIFI_CONNECTED`.
+4.  If connected, `onWiFiStatus` calls `syncTimeWithNTP()` (in `time_utils.cpp`).
+5.  `syncTimeWithNTP()`:
+    *   Configures NTP servers (`configTime`).
+    *   Attempts to get local time (`getLocalTime`).
+    *   If successful, updates the hardware RTC (`M5.Rtc.setDate`, `M5.Rtc.setTime`) and system time (`settimeofday`).
+    *   Updates the internal `lastSyncStatus` variable.
+6.  The UI (e.g., Date & Time settings screen) can call `getLastSyncStatus()` to display the latest status.
+
+## Data Flow Example (NTP Sync - Manual)
+
+1.  User navigates to Date & Time settings screen (`createTimeSelectionScreen` in `ui.cpp`).
+2.  User presses the "Sync Now" button.
+3.  The button's LVGL event callback is triggered.
+4.  The callback calls `isWiFiConnected()` (in `wifi_handler.cpp`).
+5.  If connected:
+    *   The callback updates the status label to "Syncing...".
+    *   The callback calls `syncTimeWithNTP()` (in `time_utils.cpp`).
+    *   `syncTimeWithNTP()` performs the sync as described above.
+    *   The callback calls `getLastSyncStatus()` and updates the status label with the result.
+6.  If not connected:
+    *   The callback updates the status label to "Failed (No WiFi)".
 
 ## Error Handling
 
