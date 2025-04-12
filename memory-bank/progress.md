@@ -8,6 +8,11 @@
 - **NTP Time Synchronization implemented** (automatic on WiFi connect, manual option).
 - Device settings (Sound, Brightness, Date/Time, Power) implemented.
 - Memory bank files updated to reflect current codebase (as of 2025-04-09).
+- **MCP Servers Configured**:
+    - `github.com/modelcontextprotocol/servers/tree/main/src/memory`: Enabled
+    - `github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking`: Disabled
+    - `mcp-sequentialthinking-tools`: Enabled
+    - `github.com/modelcontextprotocol/servers/tree/main/src/brave-search`: Enabled (Locally built)
 
 ## What Works (Based on Code Analysis)
 1.  **User Interface (LVGL v9)**:

@@ -125,21 +125,7 @@ void setup() {
     wifiManager.begin(); // Starts WiFiManager background task
     DEBUG_PRINT("WiFi Manager initialized.");
 
-    // --- ADDED: Initial NTP Sync Attempt ---
-    // Check if WiFi is enabled and if it connected automatically on boot
-    if (wifiEnabled && WiFi.status() == WL_CONNECTED) {
-        DEBUG_PRINT("WiFi connected automatically on boot, attempting initial NTP sync...");
-        if (syncTimeWithNTP()) {
-            DEBUG_PRINT("Initial NTP sync successful.");
-        } else {
-            DEBUG_PRINT("Initial NTP sync failed.");
-        }
-    } else if (wifiEnabled) {
-        DEBUG_PRINT("WiFi enabled, but not connected yet. NTP sync will occur upon connection.");
-    } else {
-        DEBUG_PRINT("WiFi disabled. NTP sync skipped.");
-    }
-    // --- END ADDED ---
+    // Initial NTP sync will be triggered by onWiFiStatus callback if WiFi connects.
 
     DEBUG_PRINT("Setup complete!");
 }

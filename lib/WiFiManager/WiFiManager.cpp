@@ -64,12 +64,44 @@ bool WiFiManager::connect(const String& ssid, const String& password, bool save,
 }
 
 bool WiFiManager::connectToBestNetwork() {
-    if (!_enabled || _savedNetworks.empty()) return false;
-    sortNetworksByPriority(_savedNetworks);
-    for (const auto& network : _savedNetworks) {
-        if (connect(network.ssid, network.password, false, network.priority)) return true;
+    // Cannot connect if WiFi is disabled, no networks were scanned recently, or no networks are saved.
+    if (!_enabled || _scanResults.empty() || _savedNetworks.empty()) {
+        return false;
     }
-    return false;
+
+    std::vector<NetworkInfo> candidates;
+    // Find networks that are both in the latest scan results and in our saved list
+    for (const auto& scannedNetwork : _scanResults) {
+        int savedIdx = findNetwork(scannedNetwork.ssid, _savedNetworks);
+        if (savedIdx >= 0) {
+            // This network is saved and was found in the scan. Add it as a candidate.
+            NetworkInfo candidate = _savedNetworks[savedIdx]; // Start with saved info (SSID, password, priority)
+            candidate.rssi = scannedNetwork.rssi; // Update with current RSSI from scan
+            candidate.encryptionType = scannedNetwork.encryptionType; // Update with current encryption type
+            candidate.connected = false; // Reset connected status for this check
+            // 'saved' flag remains true
+            candidates.push_back(candidate);
+        }
+    }
+
+    if (candidates.empty()) {
+        // No saved networks were found in the latest scan results.
+        notifyStatus("No saved networks found in range.");
+        return false;
+    }
+
+    // Sort potential candidates: highest priority first, then strongest signal (RSSI)
+    sortNetworksByPriority(candidates);
+
+    // Get the best candidate based on sorting
+    const auto& bestCandidate = candidates[0];
+
+    // Attempt to connect only to this best candidate
+    notifyStatus("Attempting connection to best saved network in range: " + bestCandidate.ssid);
+    // Use saved credentials (password), don't re-save, use saved priority
+    // The connect function handles setting the state to WIFI_CONNECTING and starting the WiFi.begin process.
+    // The state machine in update() will then monitor the connection progress.
+    return connect(bestCandidate.ssid, bestCandidate.password, false, bestCandidate.priority);
 }
 
 void WiFiManager::disconnect(bool manual) {

@@ -2,14 +2,16 @@
 #include "globals.h"
 #include <sys/time.h> // For settimeofday
 #include <WiFi.h>     // For WiFi status check
-#include <time.h>     // For time functions like configTime, getLocalTime
+#include <time.h>     // For time functions like configTime, getLocalTime, time_t, mktime, localtime_r
 
 // --- NTP Configuration ---
-const char* ntpServer1 = "pool.ntp.org";
-const char* ntpServer2 = "time.nist.gov";
-// TODO: Make timezone configurable. Using UTC for now.
-const long gmtOffset_sec = 0; // UTC offset in seconds
-const int daylightOffset_sec = 0; // Daylight saving offset in seconds
+// const char* ntpServer1 = "pool.ntp.org";
+// const char* ntpServer2 = "time.nist.gov";
+const char* ntpServer1 = "0.pool.ntp.org"; // User requested servers
+const char* ntpServer2 = "1.pool.ntp.org";
+const char* ntpServer3 = "2.pool.ntp.org";
+// Timezone handling will be done manually by fetching UTC and applying offset
+const long utcOffsetSeconds = -4 * 3600; // EDT is UTC-4. Adjust if/when standard time starts. TODO: Make this dynamic or configurable
 
 // --- Static variable for last sync status ---
 static String lastSyncStatus = "Never";
@@ -86,7 +88,6 @@ void setSystemTimeFromRTC() {
     }
 }
 
-// Implementation from .ino lines 3999-4031
 // Note: This function relies on global variables selected_date, selected_hour, etc.
 // which are defined in ui.cpp (declared extern in globals.h)
 void save_time_to_rtc() {
@@ -165,50 +166,89 @@ bool syncTimeWithNTP() {
     if (WiFi.status() != WL_CONNECTED) {
         DEBUG_PRINT("NTP Sync failed: WiFi not connected.");
         lastSyncStatus = "Failed (No WiFi)";
-        return false;
+         return false;
     }
 
-    DEBUG_PRINT("Attempting NTP time synchronization...");
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer1, ntpServer2);
+    DEBUG_PRINT("Attempting NTP time synchronization (Fetching UTC)...");
+    // configTzTime(timeZonePOSIX, ntpServer1, ntpServer2); // Use POSIX timezone string
+    configTime(0, 0, ntpServer1, ntpServer2, ntpServer3); // Fetch UTC time, provide all 3 servers
+    delay(500); // Add a small delay after config
 
-    struct tm timeinfo;
+    struct tm timeinfo_utc; // Store fetched UTC time components
     // Try to get time for up to 10 seconds
-    if (!getLocalTime(&timeinfo, 10000)) {
-        DEBUG_PRINT("NTP Sync failed: Could not obtain time from server.");
+    if (!getLocalTime(&timeinfo_utc, 10000)) { // Get UTC time components
+        DEBUG_PRINT("NTP Sync failed: Could not obtain UTC time from server.");
         lastSyncStatus = "Failed (Server Error)";
         return false;
     }
 
-    DEBUG_PRINTF("NTP Sync successful: %s", asctime(&timeinfo));
+    DEBUG_PRINTF("NTP Sync successful (UTC): %s", asctime(&timeinfo_utc));
 
-    // Time obtained, now set the RTC
+    // --- Manually calculate local time ---
+    // Convert UTC struct tm to time_t (epoch seconds)
+    // Note: mktime usually expects local time components. Using it on UTC components might be inaccurate
+    // if the underlying system tries to apply timezone rules. A safer way is needed if available (like mkgmtime).
+    // Assuming getLocalTime after configTime(0,0,...) correctly populates timeinfo_utc with UTC components
+    // and mktime can convert it back to UTC epoch correctly in this context.
+    time_t utc_epoch = mktime(&timeinfo_utc);
+    if (utc_epoch == -1) {
+        DEBUG_PRINT("Failed to convert UTC tm struct to time_t epoch.");
+        lastSyncStatus = "Failed (Time Conversion)";
+        return false;
+    }
+    DEBUG_PRINTF("UTC Epoch: %ld\n", utc_epoch);
+
+    // Apply manual offset for local time (EDT = UTC-4)
+    time_t local_epoch = utc_epoch + utcOffsetSeconds; // Add the negative offset
+    DEBUG_PRINTF("Calculated Local Epoch: %ld (Offset: %ld)\n", local_epoch, utcOffsetSeconds);
+
+    // Convert local epoch time back to struct tm for setting RTC
+    struct tm timeinfo_local;
+    localtime_r(&local_epoch, &timeinfo_local); // Convert epoch to local time components
+    DEBUG_PRINTF("Calculated Local Time: %s", asctime(&timeinfo_local));
+
+    // Time calculated, now set the RTC using local components
     m5::rtc_date_t date_to_set;
-    date_to_set.year = timeinfo.tm_year + 1900;
-    date_to_set.month = timeinfo.tm_mon + 1;
-    date_to_set.date = timeinfo.tm_mday;
-    date_to_set.weekDay = timeinfo.tm_wday; // tm_wday: 0=Sun, 6=Sat (matches M5 RTC)
+    date_to_set.year = timeinfo_local.tm_year + 1900;
+    date_to_set.month = timeinfo_local.tm_mon + 1;
+    date_to_set.date = timeinfo_local.tm_mday;
+    date_to_set.weekDay = timeinfo_local.tm_wday; // tm_wday: 0=Sun, 6=Sat (matches M5 RTC)
 
     m5::rtc_time_t time_to_set;
-    time_to_set.hours = timeinfo.tm_hour;
-    time_to_set.minutes = timeinfo.tm_min;
-    time_to_set.seconds = timeinfo.tm_sec;
+    time_to_set.hours = timeinfo_local.tm_hour;
+    time_to_set.minutes = timeinfo_local.tm_min;
+    time_to_set.seconds = timeinfo_local.tm_sec;
 
-    DEBUG_PRINT("Setting RTC from NTP time...");
+    DEBUG_PRINTF("Attempting to set RTC Date (Local): %04d-%02d-%02d (Weekday: %d)\n", date_to_set.year, date_to_set.month, date_to_set.date, date_to_set.weekDay);
     M5.Rtc.setDate(&date_to_set); // Returns void
+    DEBUG_PRINTF("Attempting to set RTC Time (Local): %02d:%02d:%02d\n", time_to_set.hours, time_to_set.minutes, time_to_set.seconds);
     M5.Rtc.setTime(&time_to_set); // Returns void
-    DEBUG_PRINT("RTC set calls completed (assuming success).");
+    DEBUG_PRINT("RTC set calls completed.");
 
-    // Since we can't check return value, assume success if NTP fetch worked.
-    // Format the successful sync time for the status
+    // --- ADDED: Verify RTC after setting ---
+    m5::rtc_date_t read_date;
+    m5::rtc_time_t read_time;
+    bool date_ok = M5.Rtc.getDate(&read_date);
+    bool time_ok = M5.Rtc.getTime(&read_time);
+    if (date_ok && time_ok) {
+        DEBUG_PRINTF("RTC Read Back after NTP set: %04d-%02d-%02d %02d:%02d:%02d\n",
+                     read_date.year, read_date.month, read_date.date,
+                     read_time.hours, read_time.minutes, read_time.seconds);
+        // Optional: Compare read_date/read_time with date_to_set/time_to_set for stricter verification
+    } else {
+        DEBUG_PRINT("Failed to read back RTC time after NTP set!");
+    }
+    // --- END ADDED ---
+
+    // Format the successful sync time for the status (using calculated local time)
     char buffer[30];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo_local);
     lastSyncStatus = "Success: " + String(buffer);
 
-    // Ensure system time is also explicitly set (though getLocalTime might do it)
-    time_t t = mktime(&timeinfo);
-    struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
+    // Ensure system time is also explicitly set using the calculated local epoch
+    struct timeval tv = { .tv_sec = local_epoch, .tv_usec = 0 };
     settimeofday(&tv, NULL);
-    DEBUG_PRINT("System time updated from NTP.");
+    DEBUG_PRINT("System time updated from calculated local time.");
 
     return true;
 }

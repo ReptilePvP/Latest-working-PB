@@ -3328,22 +3328,6 @@ static void saved_network_forget_action(lv_event_t* e) {
 }
 
 
-// --- Implementation of the saved network delete callback ---
-// This might not be needed anymore if we don't use strdup for the main list buttons
-/*
-static void saved_network_delete_cb(lv_event_t* e_del) {
-    lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
-    if (target_btn) { // Check if target is valid
-        // Combine void* and char* declaration/cast
-        char* data_to_free = (char*)lv_obj_get_user_data(target_btn);
-        if (data_to_free) {
-            free(data_to_free);
-            DEBUG_PRINT("Freed SSID user data for button via named callback.\n");
-        }
-    }
-}
-*/
-
 void createWiFiScreen() {
     if (wifi_screen && lv_obj_is_valid(wifi_screen)) { // Check validity
         lv_obj_del(wifi_screen);
@@ -4004,7 +3988,6 @@ void updateWiFiLoadingScreen(bool success, const String& message) {
     }
     // --- END ADD BUTTONS DIRECTLY ---
 }
-
 
 // Static callback handlers for date/time rollers
 static void on_year_change(lv_event_t* e) {
