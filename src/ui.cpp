@@ -24,24 +24,26 @@ static void pants_type_card_event_cb(lv_event_t* e); // Added forward declaratio
 static void loading_screen_event_handler(lv_event_t * e); // <-- ADDED for loading screen transition
 static void saved_network_delete_cb(lv_event_t* e_del); // <-- ADDED Forward declaration for saved network delete callback
 static void saved_network_item_click_cb(lv_event_t* e); // <-- ADDED Forward declaration for saved network item click
+// --- ADDED: Forward declarations for new color/next callbacks ---
+static void shirt_color_btn_event_cb(lv_event_t* e);
+static void pants_color_btn_event_cb(lv_event_t* e);
+static void shoes_color_btn_event_cb(lv_event_t* e);
+static void shirt_color_next_btn_event_cb(lv_event_t* e); // Already exists, but ensure it's here
+static void pants_color_next_btn_event_cb(lv_event_t* e);
+static void shoes_color_next_btn_event_cb(lv_event_t* e);
 
 // Forward declarations
-void displayLogPage(lv_obj_t* list_container, int page);
 void updateStatusBar(); // Keep this one
 #include <cstring> // For strcmp, strncpy, strlen, strdup, free, memmove
 #include <cstdlib> // For free (used with strdup)
 #include <Preferences.h> // Needed for settings screens
-// #include <WiFi.h> // Keep removed
 #include <algorithm> // Needed for std::sort in createViewLogsScreen
-// #include <lvgl.h> // Keep removed
+
 
 
 // --- Style Definitions ---
 lv_style_t style_screen, style_btn, style_btn_pressed, style_title, style_text;
 lv_style_t style_card_action, style_card_info, style_card_pressed;
-// We'll use the second definition from initStyles (lines 3227-3232) as it seems more complete for card interactions.
-// lv_style_t style_gender_card, style_gender_card_pressed; // These seem unused, replaced by style_card/style_card_pressed
-// lv_style_t style_network_item, style_network_item_pressed; // Replaced by style_network/style_network_pressed
 lv_style_t style_keyboard_btn;
 lv_style_t style_network;
 lv_style_t style_network_pressed; // Added for consistency
@@ -213,6 +215,11 @@ void initStyles() {
     lv_style_set_bg_color(&style_screen, lv_color_hex(0x121212));
     lv_style_set_bg_opa(&style_screen, LV_OPA_COVER);
 
+    // Text style - Clear white
+    lv_style_init(&style_text);
+    lv_style_set_text_color(&style_text, lv_color_hex(0xFFFFFF));
+    lv_style_set_text_font(&style_text, &lv_font_montserrat_14);
+
     // Button style - Vibrant red
     lv_style_init(&style_btn);
     lv_style_set_bg_color(&style_btn, lv_color_hex(0xE31B23));
@@ -261,11 +268,6 @@ void initStyles() {
     lv_style_set_shadow_width(&style_card_info, 10);
     lv_style_set_shadow_opa(&style_card_info, LV_OPA_30);
 
-    // Text style - Clear white
-    lv_style_init(&style_text);
-    lv_style_set_text_color(&style_text, lv_color_hex(0xFFFFFF));
-    lv_style_set_text_font(&style_text, &lv_font_montserrat_14);
-
     // Keyboard button style
     lv_style_init(&style_keyboard_btn);
     lv_style_set_bg_color(&style_keyboard_btn, lv_color_hex(0x3D3D3D));
@@ -305,6 +307,7 @@ void initStyles() {
     lv_style_set_bg_color(&style_network_pressed, lv_color_hex(0x404040)); // Lighter gray when pressed
     lv_style_set_bg_opa(&style_network_pressed, LV_OPA_COVER);
 
+
     DEBUG_PRINT("Styles initialized");
 }
 String getFormattedEntry(const String& entry) {
@@ -312,10 +315,10 @@ String getFormattedEntry(const String& entry) {
     // not the timestamp. Timestamp formatting is handled by the caller.
     String entryData = entry;
     // Parse the entry data into parts
-    String parts[6]; // <<< MODIFIED: Increased size for Apparel Type + Shirt Color
+    String parts[5]; // Gender, Apparel-ShirtColors, PantsType-PantsColors, ShoeStyle-ShoeColors, Item
     int partCount = 0, startIdx = 0;
     DEBUG_PRINTF("Parsing entryData: %s (length: %d)\n", entryData.c_str(), entryData.length());
-    for (int i = 0; i < entryData.length() && partCount < 6; i++) { // <<< MODIFIED: Loop condition
+    for (int i = 0; i < entryData.length() && partCount < 5; i++) {
         if (entryData.charAt(i) == ',') {
             parts[partCount] = entryData.substring(startIdx, i);
             DEBUG_PRINTF("Part %d: %s (from %d to %d)\n", partCount, parts[partCount].c_str(), startIdx, i);
@@ -323,37 +326,64 @@ String getFormattedEntry(const String& entry) {
             startIdx = i + 1;
         }
     }
-    if (startIdx < entryData.length() && partCount < 6) { // <<< MODIFIED: Check partCount
+    if (startIdx < entryData.length() && partCount < 5) {
         parts[partCount] = entryData.substring(startIdx);
         DEBUG_PRINTF("Part %d: %s (from %d to end)\n", partCount, parts[partCount].c_str(), startIdx);
         partCount++;
     }
     DEBUG_PRINTF("Total parts found: %d\n", partCount);
 
-    // <<< ADDED: Split ApparelType-ShirtColor
+    // Split ApparelType-ShirtColors
     String apparelType = "N/A";
-    String shirtColor = "N/A";
-    if (partCount > 1) {
+    String shirtColors = "N/A";
+    if (partCount > 1 && !parts[1].isEmpty()) {
         int hyphenPos = parts[1].indexOf('-');
         if (hyphenPos != -1) {
             apparelType = parts[1].substring(0, hyphenPos);
-            shirtColor = parts[1].substring(hyphenPos + 1);
+            shirtColors = parts[1].substring(hyphenPos + 1);
+            shirtColors.replace("+", ", "); // Replace '+' with ', ' for display
         } else {
-            // Handle case where hyphen might be missing (e.g., old data)
-            shirtColor = parts[1]; // Assume it's just the color if no hyphen
+            apparelType = parts[1]; // Fallback if no hyphen
         }
     }
-    // >>> ADDED
+
+    // Split PantsType-PantsColors
+    String pantsType = "N/A";
+    String pantsColors = "N/A";
+    if (partCount > 2 && !parts[2].isEmpty()) {
+        int hyphenPos = parts[2].indexOf('-');
+        if (hyphenPos != -1) {
+            pantsType = parts[2].substring(0, hyphenPos);
+            pantsColors = parts[2].substring(hyphenPos + 1);
+            pantsColors.replace("+", ", "); // Replace '+' with ', ' for display
+        } else {
+            pantsType = parts[2]; // Fallback if no hyphen
+        }
+    }
+
+    // Split ShoeStyle-ShoeColors
+    String shoeStyle = "N/A";
+    String shoeColors = "N/A";
+    if (partCount > 3 && !parts[3].isEmpty()) {
+        int hyphenPos = parts[3].indexOf('-');
+        if (hyphenPos != -1) {
+            shoeStyle = parts[3].substring(0, hyphenPos);
+            shoeColors = parts[3].substring(hyphenPos + 1);
+            shoeColors.replace("+", ", "); // Replace '+' with ', ' for display
+        } else {
+            shoeStyle = parts[3]; // Fallback if no hyphen
+        }
+    }
 
     // Format the output (Timestamp is now handled by the caller)
     String formatted = "Gender: " + (partCount > 0 ? parts[0] : "N/A") + "\n";
-    // <<< MODIFIED: Use split parts
     formatted += "Apparel: " + apparelType + "\n";
-    formatted += "Shirt Color: " + shirtColor + "\n";
-    // >>> MODIFIED
-    formatted += "Pants: " + (partCount > 2 ? parts[2] : "N/A") + "\n";
-    formatted += "Shoes: " + (partCount > 3 ? parts[3] : "N/A") + "\n";
-    formatted += "Item: " + (partCount > 4 ? parts[4] : "N/A"); // Item is now part 4
+    formatted += "Shirt Color: " + shirtColors + "\n";
+    formatted += "Pants Type: " + pantsType + "\n";
+    formatted += "Pants Color: " + pantsColors + "\n";
+    formatted += "Shoe Style: " + shoeStyle + "\n";
+    formatted += "Shoe Color: " + shoeColors + "\n";
+    formatted += "Items: " + (partCount > 4 ? parts[4] : "N/A");
 
     DEBUG_PRINTF("Formatted: %s\n", formatted.c_str());
     return formatted;
@@ -1298,76 +1328,6 @@ void createViewLogsScreen() {
     DEBUG_PRINT("View logs screen created successfully");
 }
 
-// Function to display a specific page of logs
-void displayLogPage(lv_obj_t* list_container, int page) {
-    if (!list_container || !lv_obj_is_valid(list_container)) {
-        DEBUG_PRINT("Error: Invalid list container in displayLogPage.");
-        return;
-    }
-    lv_obj_clean(list_container); // Clear previous entries
-
-    int start_index = page * LOGS_PER_PAGE;
-    int end_index = start_index + LOGS_PER_PAGE;
-    if (end_index > parsedLogEntries.size()) {
-        end_index = parsedLogEntries.size();
-    }
-
-    DEBUG_PRINTF("Displaying page %d (Indices %d to %d)\n", page, start_index, end_index - 1);
-
-    if (start_index >= end_index) {
-        lv_obj_t* empty_label = lv_label_create(list_container);
-        lv_label_set_text(empty_label, "No logs on this page.");
-        lv_obj_center(empty_label);
-        lv_obj_add_style(empty_label, &style_text, 0);
-    } else {
-        for (int i = start_index; i < end_index; ++i) {
-            const LogEntry& entry = parsedLogEntries[i];
-            // Format timestamp
-            char time_str[20]; // Buffer for formatted time
-            struct tm timeinfo;
-            localtime_r(&entry.timestamp, &timeinfo);
-            strftime(time_str, sizeof(time_str), "%m/%d %H:%M:%S", &timeinfo); // MM/DD HH:MM:SS
-
-            // Format entry data
-            String formatted_data = getFormattedEntry(parsedLogEntries[i]);
-
-            // Create list item container
-            lv_obj_t* item_cont = lv_obj_create(list_container);
-            lv_obj_set_width(item_cont, lv_pct(100)); // Use percentage width
-            lv_obj_set_height(item_cont, LV_SIZE_CONTENT); // Adjust height based on content
-            lv_obj_set_style_bg_color(item_cont, lv_color_hex(0x3A3A3A), 0); // Darker item background
-            lv_obj_set_style_pad_all(item_cont, 5, 0);
-            lv_obj_set_style_radius(item_cont, 5, 0);
-            lv_obj_set_style_border_width(item_cont, 0, 0);
-            lv_obj_set_flex_flow(item_cont, LV_FLEX_FLOW_COLUMN); // Arrange labels vertically
-
-            // Timestamp Label
-            lv_obj_t* time_label_item = lv_label_create(item_cont); // Renamed to avoid conflict
-            lv_label_set_text(time_label_item, time_str);
-            lv_obj_set_style_text_font(time_label_item, &lv_font_montserrat_12, 0); // Smaller font
-            lv_obj_set_style_text_color(time_label_item, lv_color_hex(0xCCCCCC), 0); // Lighter gray
-
-            // Data Label
-            lv_obj_t* data_label = lv_label_create(item_cont);
-            lv_label_set_text(data_label, formatted_data.c_str());
-            lv_label_set_long_mode(data_label, LV_LABEL_LONG_WRAP); // Wrap long text
-            lv_obj_set_width(data_label, lv_pct(98)); // Allow wrapping within container width
-            lv_obj_add_style(data_label, &style_text, 0); // Use standard text style
-            lv_obj_set_style_text_font(data_label, &lv_font_montserrat_14, 0); // Standard font size
-        }
-    }
-
-    // Update pagination label
-    lv_obj_t* page_cont = lv_obj_get_parent(list_container); // Get the main screen
-    page_cont = lv_obj_get_child(page_cont, -1); // Get the last child (should be page_cont)
-    if (page_cont && lv_obj_get_child_cnt(page_cont) == 3) { // Basic check
-        lv_obj_t* page_label = (lv_obj_t*)lv_obj_get_user_data(page_cont); // Retrieve label from user data
-        if (page_label) {
-            lv_label_set_text_fmt(page_label, "Page %d / %d", page + 1, totalLogPages > 0 ? totalLogPages : 1);
-        }
-    }
-}
-
 
 void createGenderMenu() {
     DEBUG_PRINT("Creating Gender Menu...");
@@ -1509,6 +1469,8 @@ void createApparelTypeMenu() {
         const char* type = (const char*)lv_event_get_user_data(e);
         selectedApparelType = String(type);
         DEBUG_PRINTF("Selected Apparel Type: %s\n", selectedApparelType.c_str());
+        // Initialize currentEntry here, only with Gender
+        currentEntry = selectedGender + ","; 
         createColorMenuShirt(); // Proceed to shirt color selection
     };
 
@@ -1562,7 +1524,12 @@ void createItemMenu() {
         lv_obj_add_event_cb(btn, [](lv_event_t *e) {
             lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e); // Corrected cast
             lv_obj_t* label = lv_obj_get_child(target_btn, 0);
-            if (label) { currentEntry += String(lv_label_get_text(label)); createConfirmScreen(); }
+            if (label) { 
+                selectedItem = String(lv_label_get_text(label));
+                currentEntry += selectedItem; // Append only the item name
+                DEBUG_PRINTF("Selected Item: %s, Final currentEntry: %s\n", selectedItem.c_str(), currentEntry.c_str());
+                createConfirmScreen(); 
+            }
         }, LV_EVENT_CLICKED, NULL);
     }
     lv_obj_update_layout(list_cont); // Update layout before checking scroll height
@@ -1655,60 +1622,177 @@ const ColorInfo colors[] = {
 };
 const int NUM_COLORS = sizeof(colors) / sizeof(colors[0]);
 
-// Static callback function for color buttons
-static void color_btn_event_cb(lv_event_t* e) {
-    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e); // Cast needed in v9
-    const char* color_name = (const char*)lv_event_get_user_data(e);
-    bool is_selected = lv_obj_has_state(btn, LV_STATE_CHECKED);
+// --- Specific Color Button Callbacks ---
 
-    // Determine which color menu we are in (Shirt, Pants, Shoes)
-    // We can check the parent screen or use a global state variable if needed.
-    // For now, assume we know it's the shirt color menu based on context.
-    String* targetColorString = &selectedShirtColors; // Default to shirt
-
-    // Find the parent screen to determine context (a bit fragile, consider passing context)
-    lv_obj_t* screen = lv_obj_get_screen(btn);
-    // A better way might be to pass the target string pointer as user data to the NEXT button
-    // or store context in the screen's user data.
-
-    // Update the selected colors string
+// Helper function to update color string (using '+' separator)
+static void update_color_string(String* colorSelection, const char* color_name, bool add) {
     String color_str = String(color_name);
-    if (is_selected) {
+    if (add) {
         // Add color if not already present
-        if (targetColorString->indexOf(color_str) == -1) {
-            if (targetColorString->length() > 0) {
-                *targetColorString += ", ";
+        if (colorSelection->indexOf(color_str) == -1) {
+            if (colorSelection->length() > 0) {
+                *colorSelection += "+"; // Use '+' as separator
             }
-            *targetColorString += color_str;
+            *colorSelection += color_str;
         }
     } else {
-        // Remove color
-        String search_str = ", " + color_str;
-        targetColorString->replace(search_str, "");
-        search_str = color_str + ", ";
-        targetColorString->replace(search_str, "");
-        // If it was the only color
-        if (*targetColorString == color_str) {
-            *targetColorString = "";
-        }
-    }
-    DEBUG_PRINTF("Selected Shirt Colors: %s\n", targetColorString->c_str());
-
-    // Enable/disable Next button based on selection
-    // Find the Next button (assuming it's stored in shirt_next_btn)
-    if (shirt_next_btn) { // Check if the pointer is valid
-        if (targetColorString->length() > 0) {
-            lv_obj_clear_state(shirt_next_btn, LV_STATE_DISABLED);
-        } else {
-            lv_obj_add_state(shirt_next_btn, LV_STATE_DISABLED);
+        // Remove color (handle '+' separator)
+        String search_str_prefix = color_str + "+";
+        String search_str_suffix = "+" + color_str;
+        
+        if (colorSelection->indexOf(search_str_prefix) != -1) {
+             colorSelection->replace(search_str_prefix, "");
+        } else if (colorSelection->indexOf(search_str_suffix) != -1) {
+             colorSelection->replace(search_str_suffix, "");
+        } else if (*colorSelection == color_str) {
+             // If it was the only color
+             *colorSelection = "";
         }
     }
 }
 
+static void shirt_color_btn_event_cb(lv_event_t* e) {
+    DEBUG_PRINT("--- shirt_color_btn_event_cb START ---");
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    int color_index = -1; // Initialize to invalid index
+
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        void* user_data = lv_event_get_user_data(e);
+        // Safely cast void* back to integer index
+        color_index = (int)(uintptr_t)user_data;
+
+        // Bounds Checking
+        const int num_colors = sizeof(colors) / sizeof(colors[0]);
+        if (color_index >= 0 && color_index < num_colors) {
+            const char* color_name = colors[color_index].name; // Get name from global array
+            bool is_selected = lv_obj_has_state(btn, LV_STATE_CHECKED); // Get current state
+
+            DEBUG_PRINTF("Color Button Pressed: %s (Index: %d), Selected: %s\n", color_name, color_index, is_selected ? "true" : "false");
+
+            DEBUG_PRINTF("selectedShirtColors BEFORE update: '%s'\n", selectedShirtColors.c_str()); // Log before
+            update_color_string(&selectedShirtColors, color_name, is_selected);
+            DEBUG_PRINTF("selectedShirtColors AFTER update: '%s'\n", selectedShirtColors.c_str()); // Log after
+
+            // Enable/disable Next button
+            if (shirt_next_btn && lv_obj_is_valid(shirt_next_btn)) {
+                DEBUG_PRINTF("Next button state BEFORE update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
+                bool should_be_enabled = (selectedShirtColors.length() > 0);
+                if (should_be_enabled) {
+                    lv_obj_clear_state(shirt_next_btn, LV_STATE_DISABLED);
+                    DEBUG_PRINT("Next button: Enabling");
+                } else {
+                    lv_obj_add_state(shirt_next_btn, LV_STATE_DISABLED);
+                    DEBUG_PRINT("Next button: Disabling");
+                }
+                DEBUG_PRINTF("Next button state AFTER update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
+            } else {
+                DEBUG_PRINT("Error: shirt_next_btn is NULL or invalid!");
+            }
+        } else {
+            // Handle invalid index
+            DEBUG_PRINTF("Error: Invalid color index %d received in shirt_color_btn_event_cb\n", color_index);
+        }
+    }
+    DEBUG_PRINT("--- shirt_color_btn_event_cb END ---"); // Log end
+}
+
+static void pants_color_btn_event_cb(lv_event_t* e) {
+    // DEBUG_PRINT("--- pants_color_btn_event_cb START ---");
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    const char* color_name = (const char*)lv_event_get_user_data(e); // Get user_data from event
+
+    if (!color_name) {
+        DEBUG_PRINT("Error: color_name is NULL in pants callback!");
+        return; // Exit if color_name is null
+    }
+    bool is_selected = lv_obj_has_state(btn, LV_STATE_CHECKED);
+
+    // DEBUG_PRINTF("Pants Color Button: %s, Selected: %d\n", color_name, is_selected);
+    update_color_string(&selectedPantsColors, color_name, is_selected);
+    DEBUG_PRINTF("Selected Pants Colors: %s\n", selectedPantsColors.c_str());
+
+    // Enable/disable Next button
+    if (pants_next_btn && lv_obj_is_valid(pants_next_btn)) {
+        DEBUG_PRINTF("Next button state BEFORE update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
+        bool should_be_enabled = (selectedShirtColors.length() > 0);
+        if (should_be_enabled) {
+            lv_obj_clear_state(shirt_next_btn, LV_STATE_DISABLED);
+            DEBUG_PRINT("Next button: Enabling");
+        } else {
+            lv_obj_add_state(shirt_next_btn, LV_STATE_DISABLED);
+             DEBUG_PRINT("Next button: Disabling");
+        }
+         DEBUG_PRINTF("Next button state AFTER update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
+    } else {
+         DEBUG_PRINT("Error: shirt_next_btn is NULL or invalid!");
+    }
+     DEBUG_PRINT("--- shirt_color_btn_event_cb END ---"); // Log end
+}
+
+
+static void shoes_color_btn_event_cb(lv_event_t* e) {
+    // DEBUG_PRINT("--- shoes_color_btn_event_cb START ---");
+    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
+    const char* color_name = (const char*)lv_event_get_user_data(e); // Get user_data from event
+
+     if (!color_name) {
+        DEBUG_PRINT("Error: color_name is NULL in shoes callback!");
+        return; // Exit if color_name is null
+    }
+    bool is_selected = lv_obj_has_state(btn, LV_STATE_CHECKED);
+
+    // DEBUG_PRINTF("Shoes Color Button: %s, Selected: %d\n", color_name, is_selected);
+    update_color_string(&selectedShoesColors, color_name, is_selected);
+    DEBUG_PRINTF("Selected Shoes Colors: %s\n", selectedShoesColors.c_str());
+
+    // Enable/disable Next button
+    if (shoes_next_btn && lv_obj_is_valid(shoes_next_btn)) {
+        if (selectedShoesColors.length() > 0) {
+            lv_obj_clear_state(shoes_next_btn, LV_STATE_DISABLED);
+        } else {
+            lv_obj_add_state(shoes_next_btn, LV_STATE_DISABLED);
+        }
+    }
+}
+
+// --- Specific Next Button Callbacks ---
+
 // Static callback for the "Next" button in the Shirt Color menu
 static void shirt_color_next_btn_event_cb(lv_event_t* e) {
+    // Update currentEntry with Apparel Type and Shirt Colors
+    currentEntry = selectedGender + "," + selectedApparelType + "-" + selectedShirtColors + ",";
+    DEBUG_PRINTF("Updated currentEntry with Shirt Colors: %s\n", currentEntry.c_str());
     // Proceed to the next step (Pants Type selection)
     createPantsTypeMenu();
+}
+
+// Static callback for the "Next" button in the Pants Color menu
+static void pants_color_next_btn_event_cb(lv_event_t* e) {
+    if (selectedPantsColors.isEmpty()) {
+        // Optional: Add visual feedback like flashing the header
+        DEBUG_PRINT("Pants color not selected.");
+        return;
+    }
+    // Append PantsType-PantsColors,
+    currentEntry += selectedPantsType + "-" + selectedPantsColors + ",";
+    DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s-%s\n", selectedPantsType.c_str(), selectedPantsColors.c_str());
+    DEBUG_PRINTF("currentEntry is now: %s\n", currentEntry.c_str());
+    createShoeStyleMenu();
+}
+
+// Static callback for the "Next" button in the Shoes Color menu
+static void shoes_color_next_btn_event_cb(lv_event_t* e) {
+     if (selectedShoesColors.isEmpty()) {
+        // Optional: Add visual feedback
+        DEBUG_PRINT("Shoes color not selected.");
+        return;
+    }
+    // Append ShoeStyle-ShoeColors,
+    currentEntry += selectedShoeStyle + "-" + selectedShoesColors + ",";
+    DEBUG_PRINTF("Transitioning to item menu with Shoes: %s-%s\n", selectedShoeStyle.c_str(), selectedShoesColors.c_str());
+    DEBUG_PRINTF("currentEntry is now: %s\n", currentEntry.c_str());
+    createItemMenu();
 }
 
 
@@ -1808,8 +1892,9 @@ void createColorMenuShirt() {
         uint16_t brightness = (299 * r + 587 * g + 114 * b) / 1000;
         lv_obj_set_style_text_color(label, brightness > 127 ? lv_color_black() : lv_color_white(), 0);
 
-        // Add event callback
-        lv_obj_add_event_cb(btn, color_btn_event_cb, LV_EVENT_CLICKED, (void*)colors[i].name);
+        // Add event callback - Use the specific callback for shirts
+        // Pass the index 'i' as user data, cast to void*
+        lv_obj_add_event_cb(btn, shirt_color_btn_event_cb, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i); // Use VALUE_CHANGED for checkable
     }
 
     // Footer for Next button
