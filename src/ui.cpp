@@ -310,7 +310,7 @@ void initStyles() {
 
     DEBUG_PRINT("Styles initialized");
 }
-String getFormattedEntry(const String& entry) {
+String getFormattedEntry(const String& entry) { // Removed static keyword
     // This function now assumes 'entry' contains only the data part,
     // not the timestamp. Timestamp formatting is handled by the caller.
     String entryData = entry;
@@ -352,28 +352,36 @@ String getFormattedEntry(const String& entry) {
     String pantsColors = "N/A";
     if (partCount > 2 && !parts[2].isEmpty()) {
         int hyphenPos = parts[2].indexOf('-');
-        if (hyphenPos != -1) {
+        if (hyphenPos == 0) { // Hyphen at the start means only colors were provided
+             pantsColors = parts[2].substring(1); // Skip the hyphen
+             pantsColors.replace("+", ", ");
+        } else if (hyphenPos > 0) { // Hyphen in the middle means Type-Color
             pantsType = parts[2].substring(0, hyphenPos);
-            pantsColors = parts[2].substring(hyphenPos + 1);
-            pantsColors.replace("+", ", "); // Replace '+' with ', ' for display
-        } else {
-            pantsType = parts[2]; // Fallback if no hyphen
-        }
-    }
+             pantsColors = parts[2].substring(hyphenPos + 1);
+             pantsColors.replace("+", ", ");
+         } else { // No hyphen means only Type was provided
+              pantsType = parts[2];
+              // pantsColors remains "N/A"
+         }
+     }
 
     // Split ShoeStyle-ShoeColors
     String shoeStyle = "N/A";
     String shoeColors = "N/A";
     if (partCount > 3 && !parts[3].isEmpty()) {
         int hyphenPos = parts[3].indexOf('-');
-        if (hyphenPos != -1) {
+         if (hyphenPos == 0) { // Hyphen at the start means only colors were provided
+             shoeColors = parts[3].substring(1); // Skip the hyphen
+             shoeColors.replace("+", ", ");
+        } else if (hyphenPos > 0) { // Hyphen in the middle means Style-Color
             shoeStyle = parts[3].substring(0, hyphenPos);
-            shoeColors = parts[3].substring(hyphenPos + 1);
-            shoeColors.replace("+", ", "); // Replace '+' with ', ' for display
-        } else {
-            shoeStyle = parts[3]; // Fallback if no hyphen
-        }
-    }
+             shoeColors = parts[3].substring(hyphenPos + 1);
+             shoeColors.replace("+", ", ");
+         } else { // No hyphen means only Style was provided
+              shoeStyle = parts[3];
+              // shoeColors remains "N/A"
+         }
+     }
 
     // Format the output (Timestamp is now handled by the caller)
     String formatted = "Gender: " + (partCount > 0 ? parts[0] : "N/A") + "\n";
@@ -1697,40 +1705,6 @@ static void shirt_color_btn_event_cb(lv_event_t* e) {
     DEBUG_PRINT("--- shirt_color_btn_event_cb END ---"); // Log end
 }
 
-static void pants_color_btn_event_cb(lv_event_t* e) {
-    // DEBUG_PRINT("--- pants_color_btn_event_cb START ---");
-    lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
-    const char* color_name = (const char*)lv_event_get_user_data(e); // Get user_data from event
-
-    if (!color_name) {
-        DEBUG_PRINT("Error: color_name is NULL in pants callback!");
-        return; // Exit if color_name is null
-    }
-    bool is_selected = lv_obj_has_state(btn, LV_STATE_CHECKED);
-
-    // DEBUG_PRINTF("Pants Color Button: %s, Selected: %d\n", color_name, is_selected);
-    update_color_string(&selectedPantsColors, color_name, is_selected);
-    DEBUG_PRINTF("Selected Pants Colors: %s\n", selectedPantsColors.c_str());
-
-    // Enable/disable Next button
-    if (pants_next_btn && lv_obj_is_valid(pants_next_btn)) {
-        DEBUG_PRINTF("Next button state BEFORE update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
-        bool should_be_enabled = (selectedShirtColors.length() > 0);
-        if (should_be_enabled) {
-            lv_obj_clear_state(shirt_next_btn, LV_STATE_DISABLED);
-            DEBUG_PRINT("Next button: Enabling");
-        } else {
-            lv_obj_add_state(shirt_next_btn, LV_STATE_DISABLED);
-             DEBUG_PRINT("Next button: Disabling");
-        }
-         DEBUG_PRINTF("Next button state AFTER update: %s\n", lv_obj_has_state(shirt_next_btn, LV_STATE_DISABLED) ? "Disabled" : "Enabled");
-    } else {
-         DEBUG_PRINT("Error: shirt_next_btn is NULL or invalid!");
-    }
-     DEBUG_PRINT("--- shirt_color_btn_event_cb END ---"); // Log end
-}
-
-
 static void shoes_color_btn_event_cb(lv_event_t* e) {
     // DEBUG_PRINT("--- shoes_color_btn_event_cb START ---");
     lv_obj_t* btn = (lv_obj_t*)lv_event_get_target(e);
@@ -1774,10 +1748,17 @@ static void pants_color_next_btn_event_cb(lv_event_t* e) {
         DEBUG_PRINT("Pants color not selected.");
         return;
     }
-    // Append PantsType-PantsColors,
-    currentEntry += selectedPantsType + "-" + selectedPantsColors + ",";
-    DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s-%s\n", selectedPantsType.c_str(), selectedPantsColors.c_str());
-    DEBUG_PRINTF("currentEntry is now: %s\n", currentEntry.c_str());
+    // Append PantsType-PantsColors, ensuring hyphen only if both exist
+    if (!selectedPantsType.isEmpty() && !selectedPantsColors.isEmpty()) {
+        currentEntry += selectedPantsType + "-" + selectedPantsColors + ",";
+    } else if (!selectedPantsType.isEmpty()) {
+        currentEntry += selectedPantsType + ","; // Only type
+    } else if (!selectedPantsColors.isEmpty()) {
+        currentEntry += "-" + selectedPantsColors + ","; // Only colors (unlikely but handle)
+    } else {
+        currentEntry += ","; // Neither selected, add comma separator
+    }
+    DEBUG_PRINTF("Transitioning to shoes menu. currentEntry is now: %s\n", currentEntry.c_str());
     createShoeStyleMenu();
 }
 
@@ -1788,10 +1769,17 @@ static void shoes_color_next_btn_event_cb(lv_event_t* e) {
         DEBUG_PRINT("Shoes color not selected.");
         return;
     }
-    // Append ShoeStyle-ShoeColors,
-    currentEntry += selectedShoeStyle + "-" + selectedShoesColors + ",";
-    DEBUG_PRINTF("Transitioning to item menu with Shoes: %s-%s\n", selectedShoeStyle.c_str(), selectedShoesColors.c_str());
-    DEBUG_PRINTF("currentEntry is now: %s\n", currentEntry.c_str());
+    // Append ShoeStyle-ShoeColors, ensuring hyphen only if both exist
+    if (!selectedShoeStyle.isEmpty() && !selectedShoesColors.isEmpty()) {
+        currentEntry += selectedShoeStyle + "-" + selectedShoesColors + ",";
+    } else if (!selectedShoeStyle.isEmpty()) {
+        currentEntry += selectedShoeStyle + ","; // Only style
+    } else if (!selectedShoesColors.isEmpty()) {
+        currentEntry += "-" + selectedShoesColors + ","; // Only colors (unlikely but handle)
+    } else {
+        currentEntry += ","; // Neither selected, add comma separator
+    }
+    DEBUG_PRINTF("Transitioning to item menu. currentEntry is now: %s\n", currentEntry.c_str());
     createItemMenu();
 }
 
@@ -2208,7 +2196,8 @@ void createColorMenuPants() {
         } else {
             lv_obj_t* old_menu = colorMenu;
             colorMenu = nullptr;
-            currentEntry += selectedPantsColors + ",";
+            // Append PantsType-PantsColors
+            currentEntry += selectedPantsType + "-" + selectedPantsColors + ",";
             DEBUG_PRINTF("Transitioning to shoes menu with Pants: %s\n", selectedPantsColors.c_str());
             createShoeStyleMenu();
             if (old_menu && old_menu != lv_scr_act()) {
@@ -2498,7 +2487,8 @@ void createColorMenuShoes() {
         } else {
             lv_obj_t* old_menu = colorMenu;
             colorMenu = nullptr;
-            currentEntry += selectedShoesColors + ",";
+            // Append ShoeStyle-ShoeColors
+            currentEntry += selectedShoeStyle + "-" + selectedShoesColors + ",";
             DEBUG_PRINTF("Transitioning to item menu with Shoes: %s\n", selectedShoesColors.c_str());
             createItemMenu();
             if (old_menu && old_menu != lv_scr_act()) {
@@ -4643,25 +4633,22 @@ void updateTimeDisplay() {
          return;
     }
 
-
-    m5::rtc_time_t TimeStruct;
-    if (!M5.Rtc.getTime(&TimeStruct)) {
-        lv_label_set_text(time_label, "RTC Err");
+    // MODIFIED: Use getLocalTime() to get timezone-aware time
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        lv_label_set_text(time_label, "Time Err");
         return;
     }
 
-    // Convert 24-hour to 12-hour format
-    int hour = TimeStruct.hours;
-    const char* period = (hour >= 12) ? "PM" : "AM";
-    if (hour == 0) {
-        hour = 12; // Midnight
-    } else if (hour > 12) {
-        hour -= 12;
+    // Format the time using strftime with 12-hour format and AM/PM
+    char timeStr[24]; // HH:MM:SS AM/PM
+    strftime(timeStr, sizeof(timeStr), "%I:%M:%S %p", &timeinfo);
+
+    // Remove leading zero from hour if present (e.g., "02:30 PM" -> "2:30 PM") - Optional but cleaner
+    if (timeStr[0] == '0') {
+        memmove(timeStr, timeStr + 1, strlen(timeStr)); // Shift string left by 1
     }
 
-    char timeStr[24]; // HH:MM:SS AM/PM
-    snprintf(timeStr, sizeof(timeStr), "%d:%02d:%02d %s",
-             hour, TimeStruct.minutes, TimeStruct.seconds, period);
     lv_label_set_text(time_label, timeStr);
 }
 void createLockScreen() {
@@ -4723,34 +4710,24 @@ void updateLockScreenTime() {
         return; // Only update if the label exists and lock screen is active
     }
 
-    m5::rtc_date_t DateStruct;
-    m5::rtc_time_t TimeStruct;
-    // It's safer to check if getDate/getTime succeeded, though M5Unified usually works
-    if (!M5.Rtc.getDate(&DateStruct) || !M5.Rtc.getTime(&TimeStruct)) {
-         lv_label_set_text(g_lock_screen_datetime_label, "RTC Read Error");
-         return;
+    // MODIFIED: Use getLocalTime() to get timezone-aware time
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        lv_label_set_text(g_lock_screen_datetime_label, "Time Error\nSet Time");
+        return;
     }
 
+    // Format date and time using strftime
+    char date_buf[16]; // YYYY-MM-DD + null
+    char time_buf[16]; // HH:MM:SS AM/PM + null
+    strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &timeinfo);
+    strftime(time_buf, sizeof(time_buf), "%I:%M:%S %p", &timeinfo); // 12-hour format with AM/PM
 
-    struct tm timeinfo = {0};
-    timeinfo.tm_year = DateStruct.year - 1900;
-    timeinfo.tm_mon = DateStruct.month - 1;
-    timeinfo.tm_mday = DateStruct.date;
-    timeinfo.tm_hour = TimeStruct.hours;
-    timeinfo.tm_min = TimeStruct.minutes;
-    timeinfo.tm_sec = TimeStruct.seconds;
-    timeinfo.tm_isdst = -1; // Let mktime determine DST
-
-    // Check if RTC time is valid before formatting
-    if (DateStruct.year >= 2023) { // Basic validity check
-        char date_buf[16]; // YYYY-MM-DD + null
-        char time_buf[16]; // HH:MM:SS AM/PM + null
-        strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &timeinfo);
-        strftime(time_buf, sizeof(time_buf), "%I:%M:%S %p", &timeinfo); // 12-hour format with AM/PM
-
-        // Use lv_label_set_text_fmt for easier formatting with newline
-        lv_label_set_text_fmt(g_lock_screen_datetime_label, "%s\n%s", date_buf, time_buf);
-    } else {
-        lv_label_set_text(g_lock_screen_datetime_label, "RTC Error\nSet Time");
+    // Remove leading zero from hour if present (e.g., "02:30 PM" -> "2:30 PM") - Optional but cleaner
+    if (time_buf[0] == '0') {
+        memmove(time_buf, time_buf + 1, strlen(time_buf)); // Shift string left by 1
     }
+
+    // Use lv_label_set_text_fmt for easier formatting with newline
+    lv_label_set_text_fmt(g_lock_screen_datetime_label, "%s\n%s", date_buf, time_buf);
 }

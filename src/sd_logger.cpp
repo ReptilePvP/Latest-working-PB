@@ -229,14 +229,14 @@ String getFormattedEntry(const LogEntry& entry) {
         if (hyphenPos != -1) {
             pantsType = parts[2].substring(0, hyphenPos);
             pantsColor = parts[2].substring(hyphenPos + 1);
-        } else { pantsColor = parts[2]; } // Fallback
+        } else { pantsType = parts[2]; } // Fallback: Assign to type if no hyphen
     }
      if (partCount > 3 && parts[3].length() > 0) { // ShoeStyle-ShoeColor
         int hyphenPos = parts[3].indexOf('-');
         if (hyphenPos != -1) {
             shoeStyle = parts[3].substring(0, hyphenPos);
             shoeColor = parts[3].substring(hyphenPos + 1);
-        } else { shoeColor = parts[3]; } // Fallback
+        } else { shoeStyle = parts[3]; } // Fallback: Assign to style if no hyphen
     }
 
     // Format the output string

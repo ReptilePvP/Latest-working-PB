@@ -19,6 +19,7 @@
 #include <stdarg.h> // For va_list, vsnprintf
 #include <stdio.h>  // For vsnprintf
 #include <stdlib.h> // For malloc, free
+#include <esp_sntp.h> // For sntp_set_sync_mode
 
 // Helper function for DEBUG_PRINTF to handle formatting safely
 static inline void _debug_printf_helper(const char *format, ...) {
