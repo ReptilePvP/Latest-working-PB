@@ -188,7 +188,7 @@ void sendWebhook(const String& entry) {
 
     HTTPClient http;
     // TODO: Make webhook URL configurable (e.g., via Preferences or a settings screen)
-    const char* zapierUrl = "https://hooks.zapier.com/hooks/catch/21957602/2qk3799/"; // Replace with your Zapier URL
+    const char* zapierUrl = "https://hooks.zapier.com/hooks/catch/21957602/20vmc4y/"; // Replace with your Zapier URL
     Serial.println("Starting HTTP client...");
     DEBUG_PRINTF("Webhook URL: %s\n", zapierUrl);
     http.setReuse(false); // Consider setting to true if sending frequently to the same host
@@ -210,7 +210,7 @@ void sendWebhook(const String& entry) {
     // Structure payload as key-value pairs for Zapier
     String timestamp = getTimestamp(); // Needs getTimestamp() from time_utils
     String jsonPayload = "{";
-    jsonPayload += "\"timestamp\":\"" + timestamp + "\",";
+    jsonPayload += "\"TimeStamp\":\"" + timestamp + "\","; // Changed key case
 
     // Parse entry string: Gender,Apparel-ShirtColor,Pants-PantsColor,Shoe-ShoeColor,Item
     int firstComma = entry.indexOf(',');
@@ -258,14 +258,14 @@ void sendWebhook(const String& entry) {
     }
 
 
-    jsonPayload += "\"gender\":\"" + gender + "\",";
-    jsonPayload += "\"apparelType\":\"" + apparelType + "\",";
-    jsonPayload += "\"shirtColor\":\"" + shirtColor + "\","; // Key consistency
-    jsonPayload += "\"pantsType\":\"" + pantsType + "\",";
-    jsonPayload += "\"pantsColor\":\"" + pantsColor + "\",";
-    jsonPayload += "\"shoeStyle\":\"" + shoeStyle + "\","; // Key consistency
-    jsonPayload += "\"shoeColor\":\"" + shoeColor + "\","; // Key consistency
-    jsonPayload += "\"item\":\"" + item + "\"";
+    jsonPayload += "\"Gender\":\"" + gender + "\","; // Changed key case
+    jsonPayload += "\"Shirt type\":\"" + apparelType + "\","; // Changed key name
+    jsonPayload += "\"Shirt Color\":\"" + shirtColor + "\","; // Changed key name
+    jsonPayload += "\"Pants Type\":\"" + pantsType + "\","; // Changed key name
+    jsonPayload += "\"Pants Color\":\"" + pantsColor + "\","; // Changed key name
+    jsonPayload += "\"Shoe type\":\"" + shoeStyle + "\","; // Changed key name
+    jsonPayload += "\"Shoe color\":\"" + shoeColor + "\","; // Changed key name and case
+    jsonPayload += "\"Items\":\"" + item + "\""; // Changed key name and case
 
     jsonPayload += "}";
 

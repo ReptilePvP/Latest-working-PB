@@ -47,7 +47,7 @@ String getTimestamp() {
 
     // Format the time obtained (either from getLocalTime or RTC fallback)
     char buffer[25]; // dd-Mon-YYYY HH:MM:SS AM/PM
-    strftime(buffer, sizeof(buffer), "%d-%b-%Y %I:%M:%S %p", &timeinfo); // Use %I for 12-hour, %p for AM/PM
+    strftime(buffer, sizeof(buffer), "%m/%d/%y %I:%M %p", &timeinfo); // Format: MM/DD/YY HH:MM AM/PM
     return String(buffer);
 }
 

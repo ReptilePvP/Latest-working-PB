@@ -5,13 +5,13 @@ This diagram provides a high-level overview of the main operational flows in the
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI (ui.cpp / lvgl_task)
+    participant UI (ui.cpp)
     participant MainLoop (Loss_Prevention_Log.ino)
     participant WiFiHandler (wifi_handler.cpp)
-    participant WiFiManager (lib/WiFiManager)
     participant SDLogger (sd_logger.cpp)
     participant TimeUtils (time_utils.cpp)
     participant M5Hardware (M5Unified, RTC, Power, SD)
+    %% WiFiManager is now integrated into wifi_handler.cpp
 
     %% Initialization Sequence %%
     Note over MainLoop, M5Hardware: System Boot / setup()

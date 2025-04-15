@@ -124,7 +124,60 @@ void saveEntry(const String& entry) {
 
     // Update UI status and potentially send webhook
     if (wifiManager.isConnected()) { // Needs wifiManager from globals.h
-        sendWebhook(entry); // Needs sendWebhook from wifi_handler
+        // --- Parse entry for webhook payload ---
+        String parts[5]; // Gender, Apparel-ShirtColors, PantsType-PantsColors, ShoeStyle-ShoeColors, Item
+        int partCount = 0, startIdx = 0;
+        for (int i = 0; i < entry.length() && partCount < 5; i++) {
+            if (entry.charAt(i) == ',') {
+                parts[partCount] = entry.substring(startIdx, i);
+                partCount++;
+                startIdx = i + 1;
+            }
+        }
+        if (startIdx < entry.length() && partCount < 5) {
+            parts[partCount] = entry.substring(startIdx);
+            partCount++;
+        }
+
+        // Split Type-Color parts
+        String apparelType = "N/A", shirtColors = "N/A";
+        String pantsType = "N/A", pantsColors = "N/A";
+        String shoeStyle = "N/A", shoeColors = "N/A";
+
+        if (partCount > 1 && !parts[1].isEmpty()) {
+            int hyphenPos = parts[1].indexOf('-');
+            if (hyphenPos != -1) {
+                apparelType = parts[1].substring(0, hyphenPos);
+                shirtColors = parts[1].substring(hyphenPos + 1);
+                shirtColors.replace("+", ", "); // Format colors for readability
+            } else { apparelType = parts[1]; }
+        }
+        if (partCount > 2 && !parts[2].isEmpty()) {
+            int hyphenPos = parts[2].indexOf('-');
+             if (hyphenPos == 0) { pantsColors = parts[2].substring(1); pantsColors.replace("+", ", "); }
+             else if (hyphenPos > 0) { pantsType = parts[2].substring(0, hyphenPos); pantsColors = parts[2].substring(hyphenPos + 1); pantsColors.replace("+", ", "); }
+             else { pantsType = parts[2]; }
+        }
+         if (partCount > 3 && !parts[3].isEmpty()) {
+            int hyphenPos = parts[3].indexOf('-');
+             if (hyphenPos == 0) { shoeColors = parts[3].substring(1); shoeColors.replace("+", ", "); }
+             else if (hyphenPos > 0) { shoeStyle = parts[3].substring(0, hyphenPos); shoeColors = parts[3].substring(hyphenPos + 1); shoeColors.replace("+", ", "); }
+             else { shoeStyle = parts[3]; }
+        }
+        String item = (partCount > 4 ? parts[4] : "N/A");
+        String gender = (partCount > 0 ? parts[0] : "N/A");
+
+        // Construct webhook payload
+        String webhookPayload = "Gender: " + gender +
+                                ", Shirt: " + apparelType + " (" + shirtColors + ")" +
+                                ", Pants: " + pantsType + " (" + pantsColors + ")" +
+                                ", Shoes: " + shoeStyle + " (" + shoeColors + ")" +
+                                ", Item: " + item;
+
+        DEBUG_PRINTF("Original Entry for Webhook: %s\n", entry.c_str()); // Log the string being sent
+        sendWebhook(entry); // Send the original entry string
+        // --- End webhook payload formatting ---
+
         // Status depends on both save and send success (sendWebhook should ideally return status)
         // For now, assume sendWebhook handles its own status update or logs errors
         updateStatus(saved ? "Entry Saved & Sent" : "Error Saving Entry", saved ? 0x00FF00 : 0xFF0000);

@@ -543,6 +543,7 @@ void createMainMenu() {
     // Header
     lv_obj_t* header = lv_obj_create(main_menu_screen);
     lv_obj_set_size(header, SCREEN_WIDTH, 40);
+    lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_color(header, lv_color_hex(0x2D2D2D), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
     lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
@@ -551,153 +552,78 @@ void createMainMenu() {
     lv_obj_add_style(title, &style_title, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_pad_all(title, 5, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
-    // Scrollable card grid (2x3, vertical scrolling)
-    lv_obj_t* grid = lv_obj_create(main_menu_screen);
-    lv_obj_set_size(grid, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 50);
-    lv_obj_align(grid, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    static lv_coord_t col_dsc[] = {140, 140, LV_GRID_TEMPLATE_LAST}; // 2 columns
-    static lv_coord_t row_dsc[] = {80, 80, 80, LV_GRID_TEMPLATE_LAST}; // 3 rows
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-    lv_obj_set_style_pad_column(grid, 10, 0);
-    lv_obj_set_style_pad_row(grid, 10, 0);
-    lv_obj_set_content_width(grid, 300);
-    // Scroll improvements
-    lv_obj_add_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(grid, LV_DIR_VER);  // Vertical scrolling
-    lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_ACTIVE);
-    lv_obj_set_scroll_snap_y(grid, LV_SCROLL_SNAP_NONE);  // Disable snap scrolling
-    lv_obj_add_flag(grid, LV_OBJ_FLAG_SCROLL_MOMENTUM);  // Add momentum
-    current_scroll_obj = grid;
+    // Add Time Display (Top Right in Header)
+    addTimeDisplay(header); // Add time to the header object
+    lv_obj_align(time_label, LV_ALIGN_RIGHT_MID, -10, 0); // Align within header
 
-    // Card 1: New Entry (Row 0, Col 0)
-    lv_obj_t* new_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(new_card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
-    lv_obj_add_style(new_card, &style_card_action, 0);
-    lv_obj_add_style(new_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* new_icon = lv_label_create(new_card);
-    lv_label_set_text(new_icon, LV_SYMBOL_PLUS);
-    lv_obj_set_style_text_font(new_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(new_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* new_label = lv_label_create(new_card);
-    lv_label_set_text(new_label, "New Entry");
-    lv_obj_align(new_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(new_card, [](lv_event_t* e) {
-        createGenderMenu();
-    }, LV_EVENT_CLICKED, NULL);
+    // --- Main Content Container (Vertical Flex Layout) ---
+    lv_obj_t* content_cont = lv_obj_create(main_menu_screen);
+    // Adjust size to fit between header and status bar
+    lv_obj_set_size(content_cont, SCREEN_WIDTH, SCREEN_HEIGHT - 40 - 25); // Header height 40, Status bar approx 25
+    lv_obj_align(content_cont, LV_ALIGN_TOP_MID, 0, 40); // Position below header
+    lv_obj_set_style_bg_opa(content_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_pad_all(content_cont, 5, 0); // Padding around the container
+    lv_obj_set_style_pad_row(content_cont, 8, 0); // Spacing between items
+    lv_obj_set_flex_flow(content_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); // Align items center horizontally
+    lv_obj_add_flag(content_cont, LV_OBJ_FLAG_SCROLLABLE); // Make container scrollable
+    lv_obj_set_scrollbar_mode(content_cont, LV_SCROLLBAR_MODE_AUTO);
+    current_scroll_obj = content_cont; // Set for potential scroll handling
 
-    // Card 2: Logs (Row 0, Col 1)
-    lv_obj_t* logs_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(logs_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
-    lv_obj_add_style(logs_card, &style_card_action, 0);
-    lv_obj_add_style(logs_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* logs_icon = lv_label_create(logs_card);
-    lv_label_set_text(logs_icon, LV_SYMBOL_LIST); // List icon
-    lv_obj_set_style_text_font(logs_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(logs_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* logs_label = lv_label_create(logs_card);
-    lv_label_set_text(logs_label, "View Logs");
-    lv_obj_align(logs_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(logs_card, [](lv_event_t* e) {
-        createViewLogsScreen();
-    }, LV_EVENT_CLICKED, NULL);
+    // --- Helper function to create menu items ---
+    auto create_menu_item = [&](lv_obj_t* parent, const char* icon_symbol, const char* text, lv_event_cb_t event_cb) {
+        lv_obj_t* btn = lv_btn_create(parent);
+        lv_obj_set_width(btn, lv_pct(98)); // Use percentage width
+        lv_obj_set_height(btn, 50); // Fixed height for consistency
+        lv_obj_add_style(btn, &style_card_action, 0); // Use card style
+        lv_obj_add_style(btn, &style_card_pressed, LV_STATE_PRESSED); // Use card pressed style
 
-    // Card 3: Settings (Row 1, Col 0)
-    lv_obj_t* settings_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(settings_card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
-    lv_obj_add_style(settings_card, &style_card_action, 0);
-    lv_obj_add_style(settings_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* settings_icon = lv_label_create(settings_card);
-    lv_label_set_text(settings_icon, LV_SYMBOL_SETTINGS); // Settings icon
-    lv_obj_set_style_text_font(settings_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(settings_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* settings_label = lv_label_create(settings_card);
-    lv_label_set_text(settings_label, "Settings");
-    lv_obj_align(settings_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(settings_card, [](lv_event_t* e) {
-        createSettingsScreen();
-    }, LV_EVENT_CLICKED, NULL);
+        lv_obj_t* icon = lv_label_create(btn);
+        lv_label_set_text(icon, icon_symbol);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_20, 0); // Consistent icon size
+        lv_obj_align(icon, LV_ALIGN_LEFT_MID, 10, 0); // Icon on the left
 
-    // Card 4: WiFi (Row 1, Col 1)
-    lv_obj_t* wifi_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(wifi_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
-    lv_obj_add_style(wifi_card, &style_card_action, 0);
-    lv_obj_add_style(wifi_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* wifi_icon = lv_label_create(wifi_card);
-    lv_label_set_text(wifi_icon, LV_SYMBOL_WIFI); // WiFi icon
-    lv_obj_set_style_text_font(wifi_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(wifi_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* wifi_label_card = lv_label_create(wifi_card); // Renamed to avoid conflict with global wifi_label
-    lv_label_set_text(wifi_label_card, "WiFi");
-    lv_obj_align(wifi_label_card, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(wifi_card, [](lv_event_t* e) {
-        createWiFiManagerScreen();
-    }, LV_EVENT_CLICKED, NULL);
+        lv_obj_t* label = lv_label_create(btn);
+        lv_label_set_text(label, text);
+        lv_obj_add_style(label, &style_text, 0); // Use standard text style
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0); // Slightly larger text
+        lv_obj_align_to(label, icon, LV_ALIGN_OUT_RIGHT_MID, 10, 0); // Label next to icon
 
-    // Card 5: Date/Time (Row 2, Col 0)
-    lv_obj_t* datetime_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(datetime_card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
-    lv_obj_add_style(datetime_card, &style_card_action, 0);
-    lv_obj_add_style(datetime_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* datetime_icon = lv_label_create(datetime_card);
-    lv_label_set_text(datetime_icon, LV_SYMBOL_IMAGE); // Calendar icon
-    lv_obj_set_style_text_font(datetime_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(datetime_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* datetime_label = lv_label_create(datetime_card);
-    lv_label_set_text(datetime_label, "Date/Time");
-    lv_obj_align(datetime_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(datetime_card, [](lv_event_t* e) {
-        createDateSelectionScreen();
-    }, LV_EVENT_CLICKED, NULL);
+        if (event_cb) {
+            lv_obj_add_event_cb(btn, event_cb, LV_EVENT_CLICKED, NULL);
+        }
+        return btn;
+    };
 
-    // Card 6: Sleep (Row 2, Col 1) - Replaces Reset
-    lv_obj_t* sleep_card = lv_obj_create(grid);
-    lv_obj_set_grid_cell(sleep_card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 2, 1);
-    lv_obj_add_style(sleep_card, &style_card_action, 0);
-    lv_obj_add_style(sleep_card, &style_card_pressed, LV_STATE_PRESSED);
-    lv_obj_t* sleep_icon = lv_label_create(sleep_card);
-    lv_label_set_text(sleep_icon, LV_SYMBOL_EYE_CLOSE); // Sleep/Eye icon
-    lv_obj_set_style_text_font(sleep_icon, &lv_font_montserrat_20, 0);
-    lv_obj_align(sleep_icon, LV_ALIGN_TOP_MID, 0, 8);
-    lv_obj_t* sleep_label = lv_label_create(sleep_card);
-    lv_label_set_text(sleep_label, "Sleep");
-    lv_obj_align(sleep_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    // Replace light sleep with deep sleep implementation based on user feedback and example
-    lv_obj_add_event_cb(sleep_card, [](lv_event_t* e) {
-        // Create sleep screen
+    // --- Create Menu Items ---
+    create_menu_item(content_cont, LV_SYMBOL_PLUS, "New Entry", [](lv_event_t* e) { createGenderMenu(); });
+    create_menu_item(content_cont, LV_SYMBOL_LIST, "View Logs", [](lv_event_t* e) { createViewLogsScreen(); });
+    create_menu_item(content_cont, LV_SYMBOL_SETTINGS, "Settings", [](lv_event_t* e) { createSettingsScreen(); });
+    create_menu_item(content_cont, LV_SYMBOL_WIFI, "WiFi", [](lv_event_t* e) { createWiFiManagerScreen(); });
+    create_menu_item(content_cont, LV_SYMBOL_IMAGE, "Date/Time", [](lv_event_t* e) { createDateSelectionScreen(); }); // Using Image symbol as calendar
+    create_menu_item(content_cont, LV_SYMBOL_EYE_CLOSE, "Sleep", [](lv_event_t* e) {
+         // Create sleep screen
         lv_obj_t* sleep_screen = lv_obj_create(NULL);
         lv_obj_add_style(sleep_screen, &style_screen, 0); // Use existing screen style
         lv_scr_load(sleep_screen); // Load the temporary screen
 
         lv_obj_t* sleep_label = lv_label_create(sleep_screen);
         lv_label_set_text(sleep_label, "Entering sleep mode...\nTouch screen to wake");
-        // Use a standard font if lv_font_montserrat_24 is not defined or too large
         lv_obj_set_style_text_font(sleep_label, &lv_font_montserrat_20, 0);
         lv_obj_set_style_text_color(sleep_label, lv_color_white(), 0); // Ensure text is visible
         lv_obj_align(sleep_label, LV_ALIGN_CENTER, 0, 0);
         lv_task_handler(); // Update display to show the message
         delay(2000); // Wait for 2 seconds
 
-        // Prepare for deep sleep (based on M5CoreS3 wakeup example)
+        // Prepare for deep sleep
         DEBUG_PRINT("Configuring AW9523 and GPIO for deep sleep wake...");
-        // INTEN_P0 TF_DETECT ES7210 EN[0] DIS[1]
         M5.In_I2C.writeRegister8(AW9523_ADDR, 0x06, 0b11111111, 100000L);
-        // INTEN_P1 AW88298 FT6336 EN[0] DIS[1] Clear INT
-        // Disable interrupt for FT6336 (Touch) on P1.2 to prevent immediate wake? No, keep enabled.
-        // Clear any pending interrupts by reading input registers
-        M5.In_I2C.writeRegister8(AW9523_ADDR, 0x07, 0b11111011, 100000L); // Ensure P1.2 (Touch INT) interrupt is enabled
-        M5.In_I2C.readRegister8(AW9523_ADDR, 0x00, 100000L); // Read P0 input
-        M5.In_I2C.readRegister8(AW9523_ADDR, 0x01, 100000L); // Read P1 input (clears INT)
-
-        // Configure GPIO 21 (connected to AW9523 INT) as wakeup source
-        pinMode(GPIO_NUM_21, INPUT_PULLUP); // Use pullup for the interrupt line
-
-        // GPIO21 <- AW9523 INT <- AW9523 P1.2 <- Touch INT
-        // Wake up when GPIO 21 goes LOW (level 0)
+        M5.In_I2C.writeRegister8(AW9523_ADDR, 0x07, 0b11111011, 100000L);
+        M5.In_I2C.readRegister8(AW9523_ADDR, 0x00, 100000L);
+        M5.In_I2C.readRegister8(AW9523_ADDR, 0x01, 100000L);
+        pinMode(GPIO_NUM_21, INPUT_PULLUP);
         esp_sleep_enable_ext0_wakeup(GPIO_NUM_21, 0);
         DEBUG_PRINT("EXT0 wakeup enabled on GPIO 21 (LOW level)");
 
@@ -706,27 +632,16 @@ void createMainMenu() {
         M5.Lcd.sleep();
         M5.Lcd.waitDisplay();
         DEBUG_PRINT("Display asleep. Entering deep sleep...");
-
-        // Enter deep sleep
         esp_deep_sleep_start();
+    });
 
-        // --- Code below this line will not execute after deep sleep ---
-        // The device restarts from the beginning after waking from deep sleep.
-
-    }, LV_EVENT_CLICKED, NULL);
-
-
-    // Add Status Bar
-    addStatusBar(main_menu_screen);
+    // Add Status Bar (at the bottom of the main screen)
+    addStatusBar(main_menu_screen); // Pass main_menu_screen as parent
     updateStatusBar(); // Initial update
-
-    // Add Time Display
-    addTimeDisplay(main_menu_screen);
-    updateTimeDisplay(); // Initial update
 
     // Load the screen
     lv_scr_load(main_menu_screen);
-    DEBUG_PRINT("Main menu screen loaded");
+    DEBUG_PRINT("Main menu screen loaded (Redesign V2 - List Style)");
     DEBUG_PRINTF("Free heap after main menu: %d bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
 }
 
@@ -2978,22 +2893,21 @@ void createPowerManagementScreen() {
 // --- WiFi UI Functions ---
 
 void createWiFiManagerScreen() {
-    DEBUG_PRINT("Creating WiFi Manager Screen (Redesigned - Theme Applied)");
+    DEBUG_PRINT("Creating WiFi Manager Screen (Redesign V3 - Tabs)");
     if (wifi_manager_screen && lv_obj_is_valid(wifi_manager_screen)) {
         lv_obj_del(wifi_manager_screen);
         wifi_manager_screen = nullptr;
     }
     wifi_manager_screen = lv_obj_create(NULL);
-    lv_obj_add_style(wifi_manager_screen, &style_screen, 0); // Use base screen style (dark)
-    // Screen itself doesn't need to scroll, list will handle it
+    lv_obj_add_style(wifi_manager_screen, &style_screen, 0);
     lv_obj_clear_flag(wifi_manager_screen, LV_OBJ_FLAG_SCROLLABLE);
-    current_scroll_obj = nullptr; // Reset scroll object
+    current_scroll_obj = nullptr;
 
     // --- Header ---
     lv_obj_t* header = lv_obj_create(wifi_manager_screen);
-    lv_obj_set_size(header, SCREEN_WIDTH, 40); // Standard height
+    lv_obj_set_size(header, SCREEN_WIDTH, 40);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0); // Dark gray header
+    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(header, 0, 0);
     lv_obj_set_style_border_width(header, 0, 0);
@@ -3001,12 +2915,11 @@ void createWiFiManagerScreen() {
 
     // Back Button (Top-Left in Header)
     lv_obj_t* back_btn = lv_btn_create(header);
-    lv_obj_set_size(back_btn, 40, 30); // Smaller button for header
+    lv_obj_set_size(back_btn, 40, 30);
     lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 5, 0);
-    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x6c757d), 0); // Use neutral gray for back
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x6c757d), 0);
     lv_obj_set_style_radius(back_btn, 5, 0);
-    // lv_obj_add_style(back_btn, &style_btn, 0); // Don't use red base style
-    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED); // Keep pressed style (or define gray pressed)
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, LV_SYMBOL_LEFT);
     lv_obj_center(back_label);
@@ -3023,39 +2936,83 @@ void createWiFiManagerScreen() {
     // Title (Centered in Header)
     lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, "WiFi Manager");
-    lv_obj_add_style(title, &style_title, 0); // Use standard title style (white text)
+    lv_obj_add_style(title, &style_title, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
-    // --- Content Area Container ---
-    lv_obj_t* content_area = lv_obj_create(wifi_manager_screen);
-    lv_obj_set_size(content_area, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 50); // Fill space below header
-    lv_obj_align(content_area, LV_ALIGN_TOP_MID, 0, 45); // Position below header
-    lv_obj_set_style_bg_opa(content_area, LV_OPA_TRANSP, 0); // Transparent background
-    lv_obj_set_style_border_width(content_area, 0, 0);
-    lv_obj_set_style_pad_all(content_area, 5, 0);
-    lv_obj_set_flex_flow(content_area, LV_FLEX_FLOW_COLUMN); // Arrange children vertically
-    lv_obj_set_flex_align(content_area, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); // Align items center horizontally
+    // --- Tab View ---
+    lv_obj_t* tabview = lv_tabview_create(wifi_manager_screen);
+    lv_obj_set_size(tabview, SCREEN_WIDTH, SCREEN_HEIGHT - 40); // Fill below header
+    lv_obj_align(tabview, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_style_bg_color(tabview, lv_color_hex(0x2D2D2D), 0); // Tabview background
 
-    // --- WiFi Enable Section ---
-    lv_obj_t* enable_cont = lv_obj_create(content_area);
-    lv_obj_set_width(enable_cont, lv_pct(100)); // Full width
-    lv_obj_set_height(enable_cont, LV_SIZE_CONTENT); // Auto height
+    // Add tabs
+    lv_obj_t* tab_status = lv_tabview_add_tab(tabview, "Status");
+    lv_obj_t* tab_saved = lv_tabview_add_tab(tabview, "Saved");
+
+    // --- Populate Status Tab ---
+    lv_obj_set_flex_flow(tab_status, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(tab_status, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(tab_status, 5, 0);
+    lv_obj_set_style_pad_row(tab_status, 8, 0); // Spacing between elements
+
+    // Status Label (within Status Tab)
+    lv_obj_t* status_label = lv_label_create(tab_status);
+    lv_obj_set_width(status_label, lv_pct(98));
+    lv_obj_add_style(status_label, &style_text, 0);
+    lv_label_set_long_mode(status_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_bottom(status_label, 10, 0); // Add padding below status
+
+    // Disconnect Button (within Status Tab)
+    lv_obj_t* disconnect_btn = lv_btn_create(tab_status);
+    lv_obj_set_size(disconnect_btn, 120, 35);
+    lv_obj_add_style(disconnect_btn, &style_btn, 0);
+    lv_obj_set_style_bg_color(disconnect_btn, lv_color_hex(0xE74C3C), 0); // Red
+    lv_obj_add_style(disconnect_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* disconnect_label = lv_label_create(disconnect_btn);
+    lv_label_set_text(disconnect_label, "Disconnect");
+    lv_obj_center(disconnect_label);
+    lv_obj_add_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN); // Hide initially
+
+    // Update Status Content
+    if (!wifiEnabled) {
+        lv_label_set_text(status_label, "WiFi is Disabled");
+        lv_obj_add_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+    } else if (wifiManager.isConnected()) {
+        String status_text = "Connected: " + wifiManager.getCurrentSSID() + "\nIP: " + wifiManager.getIPAddress();
+        lv_label_set_text(status_label, status_text.c_str());
+        lv_obj_clear_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN); // Show disconnect button
+    } else {
+        lv_label_set_text(status_label, "Status: Disconnected");
+        lv_obj_add_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Disconnect Button Event
+    lv_obj_add_event_cb(disconnect_btn, [](lv_event_t* e) {
+        DEBUG_PRINT("Disconnect button pressed.");
+        wifiManager.disconnect(true);
+        createWiFiManagerScreen(); // Refresh screen
+    }, LV_EVENT_CLICKED, NULL);
+
+    // WiFi Enable Switch (within Status Tab)
+    lv_obj_t* enable_cont = lv_obj_create(tab_status);
+    lv_obj_set_width(enable_cont, lv_pct(98));
+    lv_obj_set_height(enable_cont, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(enable_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(enable_cont, 0, 0);
-    lv_obj_set_style_pad_all(enable_cont, 5, 0); // Padding inside container
+    lv_obj_set_style_pad_all(enable_cont, 5, 0);
+    lv_obj_set_flex_flow(enable_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(enable_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t* wifi_enable_label = lv_label_create(enable_cont);
     lv_label_set_text(wifi_enable_label, "WiFi Enable");
-    lv_obj_align(wifi_enable_label, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_add_style(wifi_enable_label, &style_text, 0); // Standard white text
+    lv_obj_add_style(wifi_enable_label, &style_text, 0);
 
     lv_obj_t* wifi_switch = lv_switch_create(enable_cont);
-    lv_obj_align(wifi_switch, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_size(wifi_switch, 50, 25);
-    // Apply theme colors to switch
-    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0xE31B23), LV_PART_INDICATOR | LV_STATE_CHECKED); // Red indicator when checked
-    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x666666), LV_PART_INDICATOR); // Gray indicator when unchecked
-    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x444444), LV_PART_MAIN); // Dark gray background
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0xE31B23), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x666666), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x444444), LV_PART_MAIN);
 
     if (wifiEnabled) {
         lv_obj_add_state(wifi_switch, LV_STATE_CHECKED);
@@ -3067,35 +3024,24 @@ void createWiFiManagerScreen() {
         if (wifiEnabled) {
             DEBUG_PRINT("WiFi Enabled (UI)");
         } else {
-            WiFi.disconnect(true);
+            wifiManager.disconnect(true);
             DEBUG_PRINT("WiFi Disabled (UI)");
         }
         Preferences prefs;
         prefs.begin("settings", false);
         prefs.putBool("wifi_enabled", wifiEnabled);
         prefs.end();
-        // Simple refresh to update button states etc.
-        createWiFiManagerScreen();
+        createWiFiManagerScreen(); // Refresh screen
     }, LV_EVENT_VALUE_CHANGED, NULL);
 
-    // --- Action Buttons Section ---
-    lv_obj_t* action_cont = lv_obj_create(content_area);
-    lv_obj_set_width(action_cont, lv_pct(100));
-    lv_obj_set_height(action_cont, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(action_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(action_cont, 0, 0);
-    lv_obj_set_style_pad_ver(action_cont, 10, 0); // Vertical padding
-    lv_obj_set_style_pad_hor(action_cont, 0, 0); // No horizontal padding needed with flex
-    lv_obj_set_flex_flow(action_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(action_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); // Space out buttons
-
-    // Scan Button
-    lv_obj_t* scan_btn = lv_btn_create(action_cont);
-    lv_obj_set_size(scan_btn, 120, 40);
-    lv_obj_add_style(scan_btn, &style_btn, 0); // Use standard red button style
-    lv_obj_add_style(scan_btn, &style_btn_pressed, LV_STATE_PRESSED); // Use standard pressed style
+    // Scan Button (within Status Tab)
+    lv_obj_t* scan_btn = lv_btn_create(tab_status);
+    lv_obj_set_width(scan_btn, lv_pct(98));
+    lv_obj_set_height(scan_btn, 40);
+    lv_obj_add_style(scan_btn, &style_btn, 0);
+    lv_obj_add_style(scan_btn, &style_btn_pressed, LV_STATE_PRESSED);
     lv_obj_t* scan_label = lv_label_create(scan_btn);
-    lv_label_set_text(scan_label, LV_SYMBOL_REFRESH " Scan");
+    lv_label_set_text(scan_label, LV_SYMBOL_REFRESH " Scan for Networks");
     lv_obj_center(scan_label);
     lv_obj_set_style_text_color(scan_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_add_event_cb(scan_btn, [](lv_event_t* e) {
@@ -3116,45 +3062,20 @@ void createWiFiManagerScreen() {
         }
     }, LV_EVENT_CLICKED, NULL);
 
-    // Disconnect Button
-    lv_obj_t* disconnect_btn = lv_btn_create(action_cont);
-    lv_obj_set_size(disconnect_btn, 120, 40);
-    lv_obj_add_style(disconnect_btn, &style_btn, 0); // Use base style
-    lv_obj_set_style_bg_color(disconnect_btn, lv_color_hex(0xE74C3C), 0); // Keep distinct red for disconnect
-    lv_obj_add_style(disconnect_btn, &style_btn_pressed, LV_STATE_PRESSED); // Use standard pressed style
-    lv_obj_t* disconnect_label = lv_label_create(disconnect_btn);
-    lv_label_set_text(disconnect_label, "Disconnect");
-    lv_obj_center(disconnect_label);
-    lv_obj_set_style_text_color(disconnect_label, lv_color_hex(0xFFFFFF), 0);
-
-    // Show/Hide disconnect button based on current status
-    if (!wifiManager.isConnected()) {
-        lv_obj_add_flag(disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+    // Disable scan button if WiFi is off
+    if (!wifiEnabled) {
+        lv_obj_add_state(scan_btn, LV_STATE_DISABLED);
     }
 
-    lv_obj_add_event_cb(disconnect_btn, [](lv_event_t* e) {
-        DEBUG_PRINT("Disconnect button pressed.");
-        wifiManager.disconnect(true);
-        lv_obj_add_flag((lv_obj_t*)lv_event_get_target(e), LV_OBJ_FLAG_HIDDEN); // Hide button
-        updateStatusBar();
-        // createWiFiManagerScreen(); // Refresh screen to update states if needed
-    }, LV_EVENT_CLICKED, NULL);
+    // --- Populate Saved Tab ---
+    lv_obj_set_flex_flow(tab_saved, LV_FLEX_FLOW_COLUMN); // Use flex for the list container
+    lv_obj_set_style_pad_all(tab_saved, 0, 0); // No padding on the tab page itself
 
-
-    // --- Saved Networks Section ---
-    lv_obj_t* saved_list_label = lv_label_create(content_area);
-    lv_label_set_text(saved_list_label, "Saved Networks");
-    lv_obj_set_width(saved_list_label, lv_pct(100)); // Full width
-    lv_obj_set_style_text_align(saved_list_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_pad_top(saved_list_label, 10, 0); // Add some space above the label
-    lv_obj_add_style(saved_list_label, &style_text, 0); // Standard white text
-
-    lv_obj_t* saved_networks_list_widget = lv_list_create(content_area);
-    lv_obj_set_width(saved_networks_list_widget, lv_pct(100)); // Full width
-    lv_obj_set_flex_grow(saved_networks_list_widget, 1); // Expand to fill space
-    lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x2D2D2D), 0); // Dark gray list background
+    lv_obj_t* saved_networks_list_widget = lv_list_create(tab_saved);
+    lv_obj_set_size(saved_networks_list_widget, lv_pct(100), lv_pct(100)); // List fills the tab
+    lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x2D2D2D), 0);
     lv_obj_set_style_pad_all(saved_networks_list_widget, 5, 0);
-    lv_obj_set_style_radius(saved_networks_list_widget, 8, 0); // Rounded corners
+    lv_obj_set_style_radius(saved_networks_list_widget, 0, 0); // No radius for list within tab
     current_scroll_obj = saved_networks_list_widget; // List is scrollable
 
     // Populate saved networks list
@@ -3169,8 +3090,8 @@ void createWiFiManagerScreen() {
     } else {
         for (const auto& net : savedNetworks) {
             lv_obj_t* btn = lv_list_add_btn(saved_networks_list_widget, LV_SYMBOL_SETTINGS, net.ssid.c_str());
-            lv_obj_add_style(btn, &style_network, 0); // Apply themed list item style
-            lv_obj_add_style(btn, &style_network_pressed, LV_STATE_PRESSED); // Apply themed pressed style
+            lv_obj_add_style(btn, &style_network, 0);
+            lv_obj_add_style(btn, &style_network_pressed, LV_STATE_PRESSED);
 
             char* ssid_copy = strdup(net.ssid.c_str());
             if (ssid_copy) {
@@ -3192,7 +3113,7 @@ void createWiFiManagerScreen() {
     }
 
     lv_scr_load(wifi_manager_screen);
-    DEBUG_PRINT("WiFi Manager screen loaded (Redesigned - Theme Applied)");
+    DEBUG_PRINT("WiFi Manager screen loaded (Redesign V3 - Tabs)");
 }
 
 

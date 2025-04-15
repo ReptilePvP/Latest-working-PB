@@ -2,6 +2,15 @@
 
 All notable changes to the Loss Prevention Log project will be documented in this file.
 
+## [2.0.0] - 2025-04-15
+### Changed
+- Major modular refactor: separated UI (`ui.cpp`), SD logger (`sd_logger.cpp`), WiFi handler (`wifi_handler.cpp`), and time utilities (`time_utils.cpp`) into distinct modules for maintainability
+- Improved LVGL-based UI and card-style navigation
+- Enhanced WiFi management with scan, connect, and saved network features
+- SD card logging fully encapsulated in dedicated module
+- Updated documentation: README, Project Documentation, and flow diagrams
+- Improved troubleshooting guidance and error handling
+
 ## [Unreleased] - 2025-04-02
 ### Changed
 - Refactored codebase into a modular structure for improved organization and maintainability:

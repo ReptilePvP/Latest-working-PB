@@ -28,7 +28,16 @@ The Loss Prevention Log system is an IoT device built on the M5Stack CoreS3 plat
 
 ### Core Components
 
-The project follows a modular design, separating concerns into distinct C++ source (`.cpp`) and header (`.h`) files within the `src/` directory.
+The project follows a modular design, separating concerns into distinct C++ source (`.cpp`) and header (`.h`) files within the `src/` directory. As of v2.0.0, the codebase is organized as follows:
+
+- `ui.cpp` / `ui.h`: LVGL-based UI screens, styles, and event handling
+- `sd_logger.cpp` / `sd_logger.h`: SD card initialization, log writing/reading, file management
+- `wifi_handler.cpp` / `wifi_handler.h`: WiFi scanning, connection, and credential storage
+- `time_utils.cpp` / `time_utils.h`: RTC, NTP sync, and time formatting utilities
+- `globals.h`: Shared definitions and configuration
+- Main `.ino` file: Application entry, setup, and coordination between modules
+
+All modules are documented inline and in this file. See the troubleshooting and workflow sections for recent changes.
 
 1.  **Main Application (`src/Loss_Prevention_Log.ino`)**
     - Handles the overall application setup (`setup()`) and main loop (`loop()`).
