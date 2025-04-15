@@ -32,6 +32,7 @@ The Loss Prevention Log System is built on an event-driven architecture with a m
     *   **Internal engine** for WiFi connection lifecycle (scan, connect, disconnect, forget, status monitoring).
     *   Handles saving/loading known networks via `Preferences`.
     *   Provides callbacks (`StatusCallback`, `ScanCallback`) used by `src/wifi_handler.cpp`.
+    *   Includes logic (`connectToBestNetwork`) to attempt connection to saved networks, *only if* those networks are present in the latest scan results.
     *   Operates synchronously within the `update()` method called from the main loop.
 5.  **SD Logger (`src/sd_logger.h`, `src/sd_logger.cpp`)**:
     *   Handles all interactions with the SD card via SPI.

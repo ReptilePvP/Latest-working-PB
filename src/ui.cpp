@@ -1401,6 +1401,7 @@ void createGenderMenu() {
     lv_obj_align(male_icon, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_t* male_label = lv_label_create(male_card);
     lv_label_set_text(male_label, "Male");
+    lv_obj_set_style_text_color(male_label, lv_color_hex(0xFFFFFF), 0); // Set text color to white
     lv_obj_align(male_label, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_add_event_cb(male_card, gender_card_event_cb, LV_EVENT_CLICKED, (void*)"Male");
 
@@ -1415,6 +1416,7 @@ void createGenderMenu() {
     lv_obj_align(female_icon, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_t* female_label = lv_label_create(female_card);
     lv_label_set_text(female_label, "Female");
+    lv_obj_set_style_text_color(female_label, lv_color_hex(0xFFFFFF), 0); // Set text color to white
     lv_obj_align(female_label, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_add_event_cb(female_card, gender_card_event_cb, LV_EVENT_CLICKED, (void*)"Female");
 
@@ -1506,6 +1508,7 @@ void createApparelTypeMenu() {
         // Add label
         lv_obj_t* label = lv_label_create(card);
         lv_label_set_text(label, apparelTypes[i]);
+        lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0); // Set text color to white
         lv_obj_align(label, LV_ALIGN_BOTTOM_MID, 0, -8);
 
         // Add event callback
@@ -2975,89 +2978,128 @@ void createPowerManagementScreen() {
 // --- WiFi UI Functions ---
 
 void createWiFiManagerScreen() {
-    if (wifi_manager_screen && lv_obj_is_valid(wifi_manager_screen)) { // Check validity
+    DEBUG_PRINT("Creating WiFi Manager Screen (Redesigned - Theme Applied)");
+    if (wifi_manager_screen && lv_obj_is_valid(wifi_manager_screen)) {
         lv_obj_del(wifi_manager_screen);
         wifi_manager_screen = nullptr;
     }
     wifi_manager_screen = lv_obj_create(NULL);
-    lv_obj_add_style(wifi_manager_screen, &style_screen, 0);
-    lv_obj_set_style_bg_color(wifi_manager_screen, lv_color_hex(0x1A1A1A), 0); // Dark gray background
-    lv_obj_set_style_bg_opa(wifi_manager_screen, LV_OPA_COVER, 0);
-    lv_obj_add_flag(wifi_manager_screen, LV_OBJ_FLAG_SCROLLABLE); // Screen scrolls if needed
-    current_scroll_obj = wifi_manager_screen;
+    lv_obj_add_style(wifi_manager_screen, &style_screen, 0); // Use base screen style (dark)
+    // Screen itself doesn't need to scroll, list will handle it
+    lv_obj_clear_flag(wifi_manager_screen, LV_OBJ_FLAG_SCROLLABLE);
+    current_scroll_obj = nullptr; // Reset scroll object
 
-    // Back Button (Top-Left)
-    lv_obj_t* back_btn = lv_btn_create(wifi_manager_screen);
-    lv_obj_set_size(back_btn, 60, 40);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 10, 10);
-    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x333333), 0); // Darker gray button
+    // --- Header ---
+    lv_obj_t* header = lv_obj_create(wifi_manager_screen);
+    lv_obj_set_size(header, SCREEN_WIDTH, 40); // Standard height
+    lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0x333333), 0); // Dark gray header
+    lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(header, 0, 0);
+    lv_obj_set_style_border_width(header, 0, 0);
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Back Button (Top-Left in Header)
+    lv_obj_t* back_btn = lv_btn_create(header);
+    lv_obj_set_size(back_btn, 40, 30); // Smaller button for header
+    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 5, 0);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x6c757d), 0); // Use neutral gray for back
     lv_obj_set_style_radius(back_btn, 5, 0);
-    lv_obj_add_style(back_btn, &style_btn, 0);
-    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    // lv_obj_add_style(back_btn, &style_btn, 0); // Don't use red base style
+    lv_obj_add_style(back_btn, &style_btn_pressed, LV_STATE_PRESSED); // Keep pressed style (or define gray pressed)
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT); // Left arrow icon
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
     lv_obj_center(back_label);
-    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0); // White text
+    lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_add_event_cb(back_btn, [](lv_event_t* e) {
-        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e)); // Cast needed for lv_obj_get_screen
+        lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
         createSettingsScreen();
-         if (current_screen && lv_obj_is_valid(current_screen)) {
+        if (current_screen && lv_obj_is_valid(current_screen)) {
             lv_obj_del_async(current_screen);
-            wifi_manager_screen = nullptr; // Clear global pointer
+            wifi_manager_screen = nullptr;
         }
     }, LV_EVENT_CLICKED, NULL);
 
-    // Title
-    lv_obj_t* title = lv_label_create(wifi_manager_screen);
+    // Title (Centered in Header)
+    lv_obj_t* title = lv_label_create(header);
     lv_label_set_text(title, "WiFi Manager");
-    lv_obj_add_style(title, &style_title, 0);
-    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0); // White text
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_add_style(title, &style_title, 0); // Use standard title style (white text)
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
-    // WiFi Enable Switch
-    lv_obj_t* wifi_enable_label = lv_label_create(wifi_manager_screen);
+    // --- Content Area Container ---
+    lv_obj_t* content_area = lv_obj_create(wifi_manager_screen);
+    lv_obj_set_size(content_area, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 50); // Fill space below header
+    lv_obj_align(content_area, LV_ALIGN_TOP_MID, 0, 45); // Position below header
+    lv_obj_set_style_bg_opa(content_area, LV_OPA_TRANSP, 0); // Transparent background
+    lv_obj_set_style_border_width(content_area, 0, 0);
+    lv_obj_set_style_pad_all(content_area, 5, 0);
+    lv_obj_set_flex_flow(content_area, LV_FLEX_FLOW_COLUMN); // Arrange children vertically
+    lv_obj_set_flex_align(content_area, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); // Align items center horizontally
+
+    // --- WiFi Enable Section ---
+    lv_obj_t* enable_cont = lv_obj_create(content_area);
+    lv_obj_set_width(enable_cont, lv_pct(100)); // Full width
+    lv_obj_set_height(enable_cont, LV_SIZE_CONTENT); // Auto height
+    lv_obj_set_style_bg_opa(enable_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(enable_cont, 0, 0);
+    lv_obj_set_style_pad_all(enable_cont, 5, 0); // Padding inside container
+
+    lv_obj_t* wifi_enable_label = lv_label_create(enable_cont);
     lv_label_set_text(wifi_enable_label, "WiFi Enable");
-    lv_obj_align(wifi_enable_label, LV_ALIGN_TOP_LEFT, 20, 70);
-    lv_obj_add_style(wifi_enable_label, &style_text, 0);
+    lv_obj_align(wifi_enable_label, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_add_style(wifi_enable_label, &style_text, 0); // Standard white text
 
-    lv_obj_t* wifi_switch = lv_switch_create(wifi_manager_screen);
-    lv_obj_align(wifi_switch, LV_ALIGN_TOP_RIGHT, -20, 65);
+    lv_obj_t* wifi_switch = lv_switch_create(enable_cont);
+    lv_obj_align(wifi_switch, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_size(wifi_switch, 50, 25);
-    // Use wifiEnabled global variable (synced with Preferences)
+    // Apply theme colors to switch
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0xE31B23), LV_PART_INDICATOR | LV_STATE_CHECKED); // Red indicator when checked
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x666666), LV_PART_INDICATOR); // Gray indicator when unchecked
+    lv_obj_set_style_bg_color(wifi_switch, lv_color_hex(0x444444), LV_PART_MAIN); // Dark gray background
+
     if (wifiEnabled) {
         lv_obj_add_state(wifi_switch, LV_STATE_CHECKED);
     } else {
-         lv_obj_clear_state(wifi_switch, LV_STATE_CHECKED);
+        lv_obj_clear_state(wifi_switch, LV_STATE_CHECKED);
     }
     lv_obj_add_event_cb(wifi_switch, [](lv_event_t* e) {
         wifiEnabled = lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED);
         if (wifiEnabled) {
-            // wifiManager.enable(); // Assuming wifi_handler handles enabling logic
             DEBUG_PRINT("WiFi Enabled (UI)");
         } else {
-            // wifiManager.disable(); // Assuming wifi_handler handles disabling logic
-             WiFi.disconnect(true); // Force disconnect when disabling via UI
+            WiFi.disconnect(true);
             DEBUG_PRINT("WiFi Disabled (UI)");
         }
-        // Save state
         Preferences prefs;
         prefs.begin("settings", false);
         prefs.putBool("wifi_enabled", wifiEnabled);
         prefs.end();
+        // Simple refresh to update button states etc.
+        createWiFiManagerScreen();
     }, LV_EVENT_VALUE_CHANGED, NULL);
 
+    // --- Action Buttons Section ---
+    lv_obj_t* action_cont = lv_obj_create(content_area);
+    lv_obj_set_width(action_cont, lv_pct(100));
+    lv_obj_set_height(action_cont, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(action_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(action_cont, 0, 0);
+    lv_obj_set_style_pad_ver(action_cont, 10, 0); // Vertical padding
+    lv_obj_set_style_pad_hor(action_cont, 0, 0); // No horizontal padding needed with flex
+    lv_obj_set_flex_flow(action_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(action_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); // Space out buttons
+
     // Scan Button
-    lv_obj_t* scan_btn = lv_btn_create(wifi_manager_screen);
-    lv_obj_set_size(scan_btn, 100, 40);
-    lv_obj_align(scan_btn, LV_ALIGN_TOP_MID, 0, 110); // Position below switch
-    lv_obj_add_style(scan_btn, &style_btn, 0);
-    lv_obj_add_style(scan_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_t* scan_btn = lv_btn_create(action_cont);
+    lv_obj_set_size(scan_btn, 120, 40);
+    lv_obj_add_style(scan_btn, &style_btn, 0); // Use standard red button style
+    lv_obj_add_style(scan_btn, &style_btn_pressed, LV_STATE_PRESSED); // Use standard pressed style
     lv_obj_t* scan_label = lv_label_create(scan_btn);
-    lv_label_set_text(scan_label, LV_SYMBOL_REFRESH " Scan"); // Add text
+    lv_label_set_text(scan_label, LV_SYMBOL_REFRESH " Scan");
     lv_obj_center(scan_label);
-    lv_obj_set_style_text_color(scan_label, lv_color_hex(0xFFFFFF), 0); // White text
+    lv_obj_set_style_text_color(scan_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_add_event_cb(scan_btn, [](lv_event_t* e) {
-        if (wifiEnabled) { // Check global flag
+        if (wifiEnabled) {
             lv_obj_t* current_screen = lv_obj_get_screen((lv_obj_t*)lv_event_get_target(e));
             createWiFiScreen(); // Go to scan results screen
             if (current_screen && lv_obj_is_valid(current_screen)) {
@@ -3065,48 +3107,21 @@ void createWiFiManagerScreen() {
                 wifi_manager_screen = nullptr;
             }
         } else {
-            // Show message box if WiFi is disabled
-            // Create message box
             lv_obj_t* msgbox = lv_msgbox_create(NULL);
             lv_msgbox_add_title(msgbox, "WiFi Disabled");
             lv_msgbox_add_text(msgbox, "Please enable WiFi to scan.");
-            // v9: Add footer buttons
-            lv_msgbox_add_footer_button(msgbox, "OK"); // ID 0
-            // lv_msgbox_add_close_button(msgbox); // Close button is often implicit or handled by window manager
+            lv_msgbox_add_footer_button(msgbox, "OK");
             lv_obj_center(msgbox);
-            // Close message box when OK is clicked
-            lv_obj_add_event_cb(msgbox, [](lv_event_t* e) {
-                 lv_obj_t* target_mbox = (lv_obj_t*)lv_event_get_target(e); // Get the target msgbox
-                 uint16_t btn_id = *(uint16_t*)lv_event_get_param(e); // v9: Get button index from event parameter
-                 if (btn_id == 0) { // Check if "OK" button (ID 0) was clicked
-                     // No need to manually close, v9 handles it
-                     // lv_msgbox_close(target_mbox);
-                 }
-                 // If other buttons existed, check their IDs here
-            }, LV_EVENT_VALUE_CHANGED, NULL); // Event triggers when button clicked
+            lv_obj_add_event_cb(msgbox, [](lv_event_t* e_msg) { /* Auto-closes */ }, LV_EVENT_VALUE_CHANGED, NULL);
         }
     }, LV_EVENT_CLICKED, NULL);
 
-    // --- Saved Networks List ---
-    lv_obj_t* saved_list_label = lv_label_create(wifi_manager_screen);
-    lv_label_set_text(saved_list_label, "Saved Networks");
-    lv_obj_align_to(saved_list_label, scan_btn, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 15); // Position below scan button
-    lv_obj_add_style(saved_list_label, &style_text, 0);
-
-    lv_obj_t* saved_networks_list_widget = lv_list_create(wifi_manager_screen);
-    lv_obj_set_size(saved_networks_list_widget, SCREEN_WIDTH - 40, 100); // Adjust height as needed
-    lv_obj_align_to(saved_networks_list_widget, saved_list_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
-    lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x3A3A3A), 0); // List background
-    lv_obj_set_style_pad_all(saved_networks_list_widget, 5, 0);
-
-    // --- ADDED: Disconnect Button ---
-    lv_obj_t* disconnect_btn = lv_btn_create(wifi_manager_screen);
-    lv_obj_set_size(disconnect_btn, 100, 40);
-    // lv_obj_align_to(disconnect_btn, scan_btn, LV_ALIGN_OUT_RIGHT_MID, 10, 0); // Original attempt causing compiler error
-    lv_obj_align(disconnect_btn, LV_ALIGN_TOP_LEFT, 220, 110); // Align relative to parent based on scan_btn position (scan_btn aligned TOP_MID, 0, 110)
-    lv_obj_add_style(disconnect_btn, &style_btn, 0);
-    lv_obj_set_style_bg_color(disconnect_btn, lv_color_hex(0xE74C3C), 0); // Red color
-    lv_obj_add_style(disconnect_btn, &style_btn_pressed, LV_STATE_PRESSED);
+    // Disconnect Button
+    lv_obj_t* disconnect_btn = lv_btn_create(action_cont);
+    lv_obj_set_size(disconnect_btn, 120, 40);
+    lv_obj_add_style(disconnect_btn, &style_btn, 0); // Use base style
+    lv_obj_set_style_bg_color(disconnect_btn, lv_color_hex(0xE74C3C), 0); // Keep distinct red for disconnect
+    lv_obj_add_style(disconnect_btn, &style_btn_pressed, LV_STATE_PRESSED); // Use standard pressed style
     lv_obj_t* disconnect_label = lv_label_create(disconnect_btn);
     lv_label_set_text(disconnect_label, "Disconnect");
     lv_obj_center(disconnect_label);
@@ -3119,14 +3134,28 @@ void createWiFiManagerScreen() {
 
     lv_obj_add_event_cb(disconnect_btn, [](lv_event_t* e) {
         DEBUG_PRINT("Disconnect button pressed.");
-        wifiManager.disconnect(true); // Call disconnect
-        // Hide the button after disconnecting
-        lv_obj_add_flag((lv_obj_t*)lv_event_get_target(e), LV_OBJ_FLAG_HIDDEN);
-        // Optionally, refresh the screen or update status labels via callback
-        updateStatusBar(); // Update status bar immediately
+        wifiManager.disconnect(true);
+        lv_obj_add_flag((lv_obj_t*)lv_event_get_target(e), LV_OBJ_FLAG_HIDDEN); // Hide button
+        updateStatusBar();
+        // createWiFiManagerScreen(); // Refresh screen to update states if needed
     }, LV_EVENT_CLICKED, NULL);
-    // --- END ADDED: Disconnect Button ---
 
+
+    // --- Saved Networks Section ---
+    lv_obj_t* saved_list_label = lv_label_create(content_area);
+    lv_label_set_text(saved_list_label, "Saved Networks");
+    lv_obj_set_width(saved_list_label, lv_pct(100)); // Full width
+    lv_obj_set_style_text_align(saved_list_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_pad_top(saved_list_label, 10, 0); // Add some space above the label
+    lv_obj_add_style(saved_list_label, &style_text, 0); // Standard white text
+
+    lv_obj_t* saved_networks_list_widget = lv_list_create(content_area);
+    lv_obj_set_width(saved_networks_list_widget, lv_pct(100)); // Full width
+    lv_obj_set_flex_grow(saved_networks_list_widget, 1); // Expand to fill space
+    lv_obj_set_style_bg_color(saved_networks_list_widget, lv_color_hex(0x2D2D2D), 0); // Dark gray list background
+    lv_obj_set_style_pad_all(saved_networks_list_widget, 5, 0);
+    lv_obj_set_style_radius(saved_networks_list_widget, 8, 0); // Rounded corners
+    current_scroll_obj = saved_networks_list_widget; // List is scrollable
 
     // Populate saved networks list
     std::vector<NetworkInfo> savedNetworks = wifiManager.getSavedNetworks();
@@ -3139,17 +3168,14 @@ void createWiFiManagerScreen() {
         lv_obj_add_style(empty_label, &style_text, 0);
     } else {
         for (const auto& net : savedNetworks) {
-            lv_obj_t* btn = lv_list_add_btn(saved_networks_list_widget, LV_SYMBOL_SETTINGS, net.ssid.c_str()); // Use settings icon for now
+            lv_obj_t* btn = lv_list_add_btn(saved_networks_list_widget, LV_SYMBOL_SETTINGS, net.ssid.c_str());
+            lv_obj_add_style(btn, &style_network, 0); // Apply themed list item style
+            lv_obj_add_style(btn, &style_network_pressed, LV_STATE_PRESSED); // Apply themed pressed style
 
-            // Store a *copy* of the SSID string in user data using strdup
             char* ssid_copy = strdup(net.ssid.c_str());
             if (ssid_copy) {
-                lv_obj_set_user_data(btn, (void*)ssid_copy); // Store the copied C-string pointer
-
-                // Add event callback for the button - Use the new action callback
+                lv_obj_set_user_data(btn, (void*)ssid_copy);
                 lv_obj_add_event_cb(btn, saved_network_action_cb, LV_EVENT_CLICKED, NULL);
-
-                // Add delete callback to free the strdup'd memory when the button is deleted
                 lv_obj_add_event_cb(btn, [](lv_event_t* e_del) {
                     lv_obj_t* target_btn = (lv_obj_t*)lv_event_get_target(e_del);
                     char* data_to_free = (char*)lv_obj_get_user_data(target_btn);
@@ -3158,17 +3184,15 @@ void createWiFiManagerScreen() {
                         DEBUG_PRINT("Freed SSID user data for list button.\n");
                     }
                 }, LV_EVENT_DELETE, NULL);
-
             } else {
                 DEBUG_PRINT("Failed to allocate memory for saved network SSID copy");
-                lv_list_add_text(saved_networks_list_widget, "Error adding network"); // Add error text instead of button
+                lv_list_add_text(saved_networks_list_widget, "Error adding network");
             }
         }
     }
-    // --- End Saved Networks List ---
 
     lv_scr_load(wifi_manager_screen);
-    DEBUG_PRINT("WiFi Manager screen loaded");
+    DEBUG_PRINT("WiFi Manager screen loaded (Redesigned - Theme Applied)");
 }
 
 

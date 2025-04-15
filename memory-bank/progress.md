@@ -33,7 +33,7 @@
     *   Saving formatted log entries with timestamps to SD card (`/loss_prevention_log.txt`).
     *   Loading and parsing log entries for display.
     *   Optional webhook sending of log entries when WiFi is connected.
-    *   WiFi connection management (using `src/wifi_handler.*` interface, likely with `lib/WiFiManager/` engine, including connect, disconnect, forget, save/load from Preferences).
+    *   WiFi connection management (using `src/wifi_handler.*` interface, likely with `lib/WiFiManager/` engine, including connect, disconnect, forget, save/load from Preferences). **Connection attempts to saved networks now only occur if the network is visible in the current scan.**
     *   **NTP time synchronization**:
         *   Automatically syncs time with NTP server (`pool.ntp.org`, `time.nist.gov`) upon successful WiFi connection (`onWiFiStatus` callback in `wifi_handler.cpp`).
         *   Attempts initial sync in `setup()` if WiFi connects automatically.
